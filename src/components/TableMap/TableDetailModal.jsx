@@ -251,6 +251,19 @@ export const TableDetailModal = ({ table, onClose, onOpenNewOrder }) => {
 
           {activeOrder && (
             <div style={{ display: "flex", gap: "8px" }}>
+              {/* This button was missing entirely — handleGenerateBill was
+                  fully implemented (navigates to the Billing screen for this
+                  table) but never actually connected to any button, so there
+                  was no way to get from "table has an order" to "pay the
+                  bill" anywhere in the UI. */}
+              <button
+                className="btn-action"
+                style={{ background: "#ECFDF5", color: "#059669", border: "1px solid #059669", padding: "8px 14px" }}
+                onClick={handleGenerateBill}
+              >
+                <Receipt size={14} /> Generate Bill / Pay
+              </button>
+
               <button
                 className="btn-action"
                 style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #DC2626", padding: "8px 14px" }}

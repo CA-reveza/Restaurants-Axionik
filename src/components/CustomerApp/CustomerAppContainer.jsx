@@ -332,31 +332,44 @@ export const CustomerAppContainer = () => {
   // Cart calculation
   const cartSubtotal = cart.reduce((sum, item) => sum + item.total, 0);
 
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+
   const handlePlaceOrder = async () => {
-    if (cart.length === 0) return;
+    // Without this guard, a customer tapping "Place Order" more than once
+    // while the first request is still in flight (slow network, no visual
+    // feedback that it's working) fires handlePlaceOrder() again with the
+    // same non-empty cart before setCart([]) below has run — each tap
+    // creates its own separate, identical order. This is exactly what
+    // produced 4 duplicate orders for the same item/table in testing.
+    if (cart.length === 0 || isPlacingOrder) return;
+    setIsPlacingOrder(true);
 
-    const orderItems = cart.map((i) => ({
-      id: `oi-${Date.now()}-${Math.random()}`,
-      menuItemId: i.id,
-      name: i.name,
-      price: i.basePrice + i.addons.reduce((s, a) => s + a.price, 0),
-      qty: i.qty,
-      customizations: i.addons.map((a) => a.name)
-    }));
+    try {
+      const orderItems = cart.map((i) => ({
+        id: `oi-${Date.now()}-${Math.random()}`,
+        menuItemId: i.id,
+        name: i.name,
+        price: i.basePrice + i.addons.reduce((s, a) => s + a.price, 0),
+        qty: i.qty,
+        customizations: i.addons.map((a) => a.name)
+      }));
 
-    const newOrdId = await createOrder({
-      tableId: selectedTable,
-      items: orderItems,
-      guests: 2,
-      notes: cart.map((c) => c.notes).filter(Boolean).join("; "),
-      customerName: customerName || "Guest",
-      customerPhone: customerPhone || ""
-    });
+      const newOrdId = await createOrder({
+        tableId: selectedTable,
+        items: orderItems,
+        guests: 2,
+        notes: cart.map((c) => c.notes).filter(Boolean).join("; "),
+        customerName: customerName || "Guest",
+        customerPhone: customerPhone || ""
+      });
 
-    setActiveOrderId(newOrdId);
-    setCart([]);
-    setShowCartDrawer(false);
-    setScreen("tracking");
+      setActiveOrderId(newOrdId);
+      setCart([]);
+      setShowCartDrawer(false);
+      setScreen("tracking");
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   // Filtered & Sorted Menu Items — the customer-facing menu list, which was
@@ -1020,8 +1033,13 @@ export const CustomerAppContainer = () => {
                   <span className="timer-stats-mono" style={{ fontSize: "20px" }}>â‚¹{cartSubtotal}</span>
                 </div>
 
-                <button className="btn-primary" style={{ width: "100%" }} onClick={handlePlaceOrder}>
-                  Place Order to Kitchen <ArrowRight size={16} />
+                <button
+                  className="btn-primary"
+                  style={{ width: "100%", opacity: isPlacingOrder ? 0.7 : 1 }}
+                  onClick={handlePlaceOrder}
+                  disabled={isPlacingOrder}
+                >
+                  {isPlacingOrder ? "Placing Order..." : "Place Order to Kitchen"} <ArrowRight size={16} />
                 </button>
               </div>
             )}

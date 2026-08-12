@@ -249,7 +249,13 @@
   border-radius: var(--radius-card);
   border: 1px solid var(--border);
   position: sticky;
-  top: 70px;
+  /* This header lives in the standalone customer app screen, which has NO
+     navbar above it (see App.jsx — captive_portal/customer_app render with
+     no <Navbar/>). The old "top: 70px" assumed a 70px navbar was there,
+     so instead of sticking flush to the top of the viewport, it stuck
+     70px down — floating mid-scroll with menu cards visible both above
+     and below it, looking like it was overlapping the list. */
+  top: 0;
   z-index: 50;
 }
 

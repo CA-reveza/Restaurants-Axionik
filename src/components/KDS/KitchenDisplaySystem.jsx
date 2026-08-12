@@ -213,8 +213,12 @@ export const KitchenDisplaySystem = () => {
                   <button
                     className={`kds-ready-btn ${o.kdsStatus === "ready" ? "btn-served-state" : ""}`}
                     onClick={() => handleMarkReady(o.id, o.kdsStatus)}
+                    disabled={o.kdsStatus === "served"}
+                    style={o.kdsStatus === "served" ? { opacity: 0.5, cursor: "default" } : undefined}
                   >
-                    {o.kdsStatus === "ready"
+                    {o.kdsStatus === "served"
+                      ? "✓ Served"
+                      : o.kdsStatus === "ready"
                       ? "✓ Ready for Service (Mark Served)"
                       : "Mark Order Ready"}
                   </button>
