@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRUFFLES KitchenFlow — KDS Live Queue</title>
+  <style>
+    :root {
+      --bg: #FFFFFF;
+      --panel: #F8F6F0;
+      --panel-2: #EFECE6;
+      --line: #E5E2D9;
+      --text: #1F1F1F;
+      --muted: #6B7280;
+      --text-sec: #333333;
+      --orange: #234A3B;
+      --red: #DC2626;
+      --gold: #8B6B4A;
+      --green: #234A3B;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      letter-spacing: -0.015em;
+      overflow: hidden;
+    }
+    button { font: inherit; touch-action: manipulation; cursor: pointer; border: none; }
+    .app { height: 100vh; display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 90px; }
+    aside { grid-row: 1 / 3; background: var(--panel); border-right: 1px solid var(--line); padding: 24px 16px; display: flex; flex-direction: column; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--orange); margin-bottom: 24px; letter-spacing: -0.02em; }
+    .brand-mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; background: var(--orange); color: #FFFFFF; font-size: 16px; font-weight: 900; }
+    .eyebrow { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin: 0 4px 12px; }
+    .filters { display: grid; gap: 8px; }
+    .filter { border: 1px solid var(--line); border-radius: 8px; min-height: 48px; padding: 0 12px; background: var(--bg); color: var(--text-sec); display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 600; }
+    .filter.active { background: var(--orange); color: #FFFFFF; border-color: var(--orange); }
+    .badge { min-width: 24px; padding: 2px 8px; border-radius: 999px; text-align: center; background: var(--panel-2); color: var(--text); font-size: 12px; font-family: "SF Mono", "SFProText-Regular", Consolas, monospace; }
+    .filter.active .badge { background: rgba(255,255,255,0.2); color: #FFFFFF; }
+    .connection { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    main { padding: 24px; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 24px; font-weight: 700; }
+    .sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .live { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; color: var(--green); font-size: 12px; font-weight: 700; background: var(--panel); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; overflow-y: auto; flex: 1; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .card.delayed { border-left: 4px solid var(--red); }
+    .card.vip { border-left: 4px solid var(--gold); }
+    .card.ready { border-left: 4px solid var(--green); opacity: 0.8; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .status { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+    .status i { width: 6px; height: 6px; background: var(--orange); border-radius: 50%; } .ready .status i { background: var(--green); }
+    .table { text-align: right; font-size: 24px; font-weight: 700; font-family: "SF Mono", "SFProText-Regular", Consolas, monospace; }
+    .table small { display: block; color: var(--muted); font-size: 10px; font-weight: 400; }
+    .timer { display: flex; justify-content: space-between; align-items: center; background: var(--bg); border-radius: 8px; padding: 8px 12px; font-size: 12px; border: 1px solid var(--line); }
+    .timer strong { color: var(--orange); font-family: "SF Mono", "SFProText-Regular", Consolas, monospace; font-size: 16px; } .timer.overdue strong { color: var(--red); }
+    .items { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; flex: 1; }
+    .item { display: grid; grid-template-columns: 26px 1fr; gap: 8px; font-size: 14px; }
+    .qty { color: var(--orange); font-weight: 700; font-family: "SF Mono", "SFProText-Regular", Consolas, monospace; }
+    .item-name { font-weight: 600; color: var(--text); }
+    .pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .pill { color: var(--text-sec); background: var(--panel-2); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+    .instruction { padding: 8px 10px; border-radius: 8px; background: rgba(139,107,74,0.1); border: 1px solid var(--gold); color: var(--gold); font-size: 11px; }
+    .instruction b { display: block; font-size: 10px; letter-spacing: 0.5px; }
+    .ready-btn { margin-top: auto; min-height: 44px; width: 100%; border: 0; border-radius: 8px; background: var(--orange); color: #FFFFFF; font-size: 14px; font-weight: 700; } .ready .ready-btn { background: var(--green); }
+    footer { grid-column: 2; border-top: 1px solid var(--line); background: var(--panel); padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; gap: 16px; }
+    .metric label { color: var(--muted); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .metric b { color: var(--orange); font-family: "SF Mono", "SFProText-Regular", Consolas, monospace; font-size: 20px; }
+    .metric .item-value { color: var(--text); font-family: inherit; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand"><span class="brand-mark">⌁</span> TRUFFLES KDS</div>
+      <p class="eyebrow">Order filters</p>
+      <nav class="filters" id="filters"></nav>
+      <div class="connection"><span class="dot"></span> Live Shared Sync</div>
+    </aside>
+    <main>
+      <header class="topbar"><div><h1 id="title">All Orders</h1><p class="sub" id="subtitle">Kitchen Display System • Live interlinked feed</p></div><div class="live"><span class="dot"></span> LIVE SYNC ACTIVE</div></header>
+      <section class="grid" id="orderGrid" aria-live="polite"></section>
+    </main>
+    <footer>
+      <div class="metric"><label>Total Orders Today</label><b id="totalOrders">0</b></div>
+      <div class="metric"><label>Current Queue Length</label><b id="queueLength">0</b></div>
+      <div class="metric"><label>Average Prep Time</label><b id="avgPrep">12.4 min</b></div>
+      <div class="metric"><label>Top Item Sold</label><b class="item-value">Chocolate Brownie Sundae</b></div>
+    </footer>
+  </div>
+  <script>
+    const broadcastChannel = new BroadcastChannel('truffles_resto_channel');
+
+    function playNewOrderChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      } catch (e) {}
+    }
+
+    let orders = [];
+    let servedOrders = [];
+    let total = 0;
+    let lastProcessedTs = Date.now() - 2000;
+    const filterDefs = [['all','All'],['preparing','Preparing'],['ready','Ready'],['served','Served']];
+    let active = 'all';
+
+    function parseItemTuple(i) {
+      if (!i) return ['1', 'Item', []];
+      if (Array.isArray(i)) {
+        return [String(i[0] || 1), String(i[1] || 'Item'), Array.isArray(i[2]) ? i[2] : []];
+      }
+      const q = String(i.qty || i.quantity || 1);
+      const name = String(i.name || (i.menuItem && i.menuItem.name) || 'Delicious Item');
+      let cust = [];
+      if (Array.isArray(i.customizations)) {
+        cust = i.customizations.map(c => typeof c === 'string' ? c : (c.name || c.option?.name || ''));
+      }
+      return [q, name, cust];
+    }
+
+    function saveServedOrders() {
+      try {
+        localStorage.setItem('truffles_served_orders', JSON.stringify(servedOrders));
+      } catch (e) {}
+    }
+
+    function loadServedOrders() {
+      try {
+        const raw = localStorage.getItem('truffles_served_orders');
+        if (raw) servedOrders = JSON.parse(raw);
+      } catch (e) {}
+    }
+    loadServedOrders();
+
+    function loadStorageOrders() {
+      try {
+        // 1. Load Served / Paid Orders into servedOrders history
+        const paidRaw = localStorage.getItem("truffles_paid_transactions");
+        if (paidRaw) {
+          const paidList = JSON.parse(paidRaw);
+          if (Array.isArray(paidList)) {
+            paidList.forEach(item => {
+              const itemID = String(item.id || item.orderId || item.preorder_ticket || `TX-${Math.random()}`);
+              if (!servedOrders.some(s => String(s.id) === itemID)) {
+                servedOrders.unshift({
+                  id: itemID,
+                  table: String(item.tableId || item.table || '1'),
+                  status: 'served',
+                  time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  servedAt: item.paidAt ? new Date(item.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Paid & Served',
+                  age: 0,
+                  items: Array.isArray(item.items) ? item.items.map(parseItemTuple) : [['1', 'Truffles Meal', []]],
+                  notes: item.notes || ''
+                });
+              }
+            });
+          }
+        }
+
+        // 2. Load Active & Completed Orders from truffles_orders
+        const raw = localStorage.getItem("truffles_orders");
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            list.forEach(item => {
+              const itemID = String(item.id);
+              const statusStr = (item.status || '').toLowerCase();
+              const isServedOrPaid = statusStr === 'served' || statusStr === 'completed' || statusStr === 'paid';
+              
+              if (isServedOrPaid) {
+                if (!servedOrders.some(s => String(s.id) === itemID)) {
+                  servedOrders.unshift({
+                    id: itemID,
+                    table: String(item.tableId || item.table_number || item.table || '1'),
+                    status: 'served',
+                    time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    servedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    age: 0,
+                    items: Array.isArray(item.items) ? item.items.map(parseItemTuple) : [],
+                    notes: item.notes || ''
+                  });
+                }
+              } else {
+                const existing = orders.find(o => String(o.id) === itemID);
+                if (!existing && !servedOrders.some(s => String(s.id) === itemID)) {
+                  orders.push({
+                    id: itemID,
+                    table: String(item.tableId || item.table_number || item.table || '1'),
+                    status: statusStr === 'ready' ? 'ready' : 'preparing',
+                    time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    age: item.createdAt ? Math.max(1, Math.floor((Date.now() - new Date(item.createdAt).getTime()) / 60000)) : 1,
+                    items: Array.isArray(item.items) ? item.items.map(parseItemTuple) : [],
+                    notes: item.notes || ''
+                  });
+                }
+              }
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    loadStorageOrders();
+
+    function renderFilters() {
+      const el = document.getElementById('filters');
+      const collection = active === 'served' ? servedOrders : orders;
+      el.innerHTML = filterDefs.map(([key, label]) => {
+        let count = 0;
+        if (key === 'all') count = orders.length;
+        else if (key === 'served') count = servedOrders.length;
+        else count = orders.filter(o => o.status === key).length;
+        return `<button class="filter ${active === key ? 'active' : ''}" data-filter="${key}"><span>${label}</span><span class="badge">${count}</span></button>`;
+      }).join('');
+
+      el.querySelectorAll('.filter').forEach(btn => {
+        btn.onclick = () => { active = btn.dataset.filter; render(); };
+      });
+    }
+
+    function render() {
+      renderFilters();
+      let list = active === 'served' ? [...servedOrders] : [...orders];
+      if (active !== 'all' && active !== 'served') {
+        list = list.filter(o => o.status === active);
+      }
+
+      document.getElementById('totalOrders').textContent = String(orders.length + servedOrders.length);
+      document.getElementById('queueLength').textContent = String(orders.filter(o => o.status === 'preparing').length);
+
+      const grid = document.getElementById('orderGrid');
+      if (list.length === 0) {
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 48px; font-size: 16px; font-weight: 600;">No ${active} orders right now</div>`;
+        return;
+      }
+
+      grid.innerHTML = list.map(o => {
+        const isReady = o.status === 'ready';
+        const isServed = o.status === 'served';
+        return `
+          <article class="card ${isReady ? 'ready' : ''} ${o.age > 15 ? 'delayed' : ''}" data-order="${o.id}">
+            <div class="card-top">
+              <div class="status"><i></i><span>${isServed ? 'SERVED' : (isReady ? 'READY TO SERVE' : 'PREPARING')}</span></div>
+              <div class="table">T${o.table}<small>#${o.id}</small></div>
+            </div>
+            <div class="timer">
+              <span>Elapsed</span>
+              <strong data-order="${o.id}">${String(o.age).padStart(2,'0')}:00</strong>
+            </div>
+            <ul class="items">
+              ${(o.items || []).map(([qty, name, pills]) => `
+                <li class="item">
+                  <span class="qty">${qty}x</span>
+                  <div>
+                    <div class="item-name">${name}</div>
+                    ${pills && pills.length ? `<div class="pills">${pills.map(p => `<span class="pill">${p}</span>`).join('')}</div>` : ''}
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+            ${o.notes ? `<div class="instruction"><b>CUSTOMER NOTE</b>${o.notes}</div>` : ''}
+            ${!isServed ? `
+              <button class="ready-btn" onclick="toggleStatus('${o.id}')">
+                ${isReady ? 'Mark Served' : 'Mark Ready'}
+              </button>
+            ` : `<div style="text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; padding: 8px;">Served at ${o.servedAt || o.time}</div>`}
+          </article>
+        `;
+      }).join('');
+    }
+
+    function toggleStatus(id) {
+      const o = orders.find(x => String(x.id) === String(id));
+      if (!o) return;
+      if (o.status === 'preparing') {
+        o.status = 'ready';
+        broadcastChannel.postMessage({ type: 'UPDATE_ORDER_STATUS', orderId: o.id, newStatus: 'Ready' });
+        try {
+          localStorage.setItem("truffles_last_event", JSON.stringify({ type: 'UPDATE_ORDER_STATUS', orderId: o.id, newStatus: 'Ready', timestamp: Date.now() }));
+        } catch (e) {}
+      } else if (o.status === 'ready') {
+        o.status = 'served';
+        o.servedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        orders = orders.filter(x => String(x.id) !== String(id));
+        if (!servedOrders.some(s => String(s.id) === String(id))) {
+          servedOrders.unshift(o);
+        }
+        saveServedOrders();
+        broadcastChannel.postMessage({ type: 'UPDATE_ORDER_STATUS', orderId: o.id, newStatus: 'Served' });
+        try {
+          localStorage.setItem("truffles_last_event", JSON.stringify({ type: 'UPDATE_ORDER_STATUS', orderId: o.id, newStatus: 'Served', timestamp: Date.now() }));
+        } catch (e) {}
+      }
+      render();
+    }
+
+    function processIncomingEvent(data) {
+      if (!data || !data.type) return;
+      if (data.type === 'NEW_ORDER') {
+        const orderData = data.order || data;
+        const ordId = String(orderData.id || Date.now());
+        if (!orders.some(o => String(o.id) === ordId) && !servedOrders.some(s => String(s.id) === ordId)) {
+          orders.push({
+            id: ordId,
+            table: String(orderData.tableId || orderData.table_number || orderData.table || '1'),
+            status: 'preparing',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            age: 1,
+            items: Array.isArray(orderData.items) ? orderData.items.map(parseItemTuple) : [],
+            notes: orderData.notes || ''
+          });
+          playNewOrderChime();
+          render();
+        }
+      }
+    }
+
+    const SB_URL = "https://juohiqxcfzququtuzxme.supabase.co";
+    const SB_KEY = "sb_publishable_GLqjcXd0gGy58SzO01eO0Q_Yu5_Tc-h";
+
+    async function fetchSupabaseOrdersKDS() {
+      try {
+        const headers = { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY };
+        
+        let data = null;
+        try {
+          const res = await fetch(SB_URL + "/rest/v1/orders?select=*,order_items(*,menu_items(*)),restaurant_tables(*)&order=created_at.desc", { headers });
+          if (res.ok) data = await res.json();
+        } catch (e) {}
+
+        // Fallback: If join query failed due to schema cache issue, fetch tables separately and merge in JS
+        if (!Array.isArray(data)) {
+          const resOrd = await fetch(SB_URL + "/rest/v1/orders?select=*&order=created_at.desc", { headers });
+          if (resOrd.ok) {
+            const rawOrders = await resOrd.json();
+            if (Array.isArray(rawOrders)) {
+              let rawItems = [];
+              let rawTables = [];
+              try {
+                const resItm = await fetch(SB_URL + "/rest/v1/order_items?select=*", { headers });
+                if (resItm.ok) rawItems = await resItm.json();
+                const resTbl = await fetch(SB_URL + "/rest/v1/restaurant_tables?select=*", { headers });
+                if (resTbl.ok) rawTables = await resTbl.json();
+              } catch (e) {}
+
+              data = rawOrders.map(ord => ({
+                ...ord,
+                order_items: (rawItems || []).filter(i => String(i.order_id) === String(ord.id)),
+                restaurant_tables: (rawTables || []).find(t => String(t.id) === String(ord.table_id) || t.table_number === parseInt(String(ord.table_id || "").replace(/\D/g, ""), 10)) || null
+              }));
+            }
+          }
+        }
+
+        if (!Array.isArray(data)) return;
+
+        data.forEach(item => {
+          const itemID = String(item.id);
+          let tblNum = '1';
+          if (item.table_number) {
+            tblNum = item.table_number;
+          } else if (item.restaurant_tables && item.restaurant_tables.table_number) {
+            tblNum = item.restaurant_tables.table_number;
+          } else if (item.table_id) {
+            const p = parseInt(String(item.table_id).replace(/\D/g, ""), 10);
+            if (!isNaN(p) && p > 0) tblNum = p;
+          }
+
+          const statusStr = (item.order_status || '').toLowerCase();
+          const isServedOrPaid = statusStr === 'served' || statusStr === 'completed' || (item.payment_status || '').toLowerCase() === 'paid';
+
+          let parsedItems = [];
+          if (Array.isArray(item.order_items) && item.order_items.length > 0) {
+            parsedItems = item.order_items.map(i => [
+              String(i.quantity || 1),
+              String(i.menu_items?.item_name || i.menu_items?.name || i.notes || 'Delicious Dish'),
+              i.notes && i.menu_items ? [i.notes] : []
+            ]);
+          } else {
+            parsedItems = [['1', 'Truffles Meal', []]];
+          }
+
+          if (isServedOrPaid) {
+            if (!servedOrders.some(s => String(s.id) === itemID)) {
+              servedOrders.unshift({
+                id: itemID,
+                table: String(tblNum),
+                status: 'served',
+                time: item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                servedAt: 'Served',
+                age: 0,
+                items: parsedItems,
+                notes: item.notes || ''
+              });
+            }
+          } else {
+            const existing = orders.find(o => String(o.id) === itemID);
+            if (!existing && !servedOrders.some(s => String(s.id) === itemID)) {
+              orders.push({
+                id: itemID,
+                table: String(tblNum),
+                status: statusStr === 'ready' ? 'ready' : 'preparing',
+                time: item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                age: item.created_at ? Math.max(1, Math.floor((Date.now() - new Date(item.created_at).getTime()) / 60000)) : 1,
+                items: parsedItems,
+                notes: item.notes || ''
+              });
+              playNewOrderChime();
+            }
+          }
+        });
+        render();
+      } catch (e) {}
+    }
+
+    // Requirement 4: 5-Second HTTP Polling Fallback + Realtime Sync for KDS
+    setInterval(() => {
+      fetchSupabaseOrdersKDS();
+    }, 5000);
+
+    // Mobile Reconnection Lifecycle: Re-fetch & reconnect on tab wake / screen focus / online
+    function handleKDSMobileReconnect() {
+      if (document.visibilityState === 'visible') {
+        console.log('[KDS Mobile Lifecycle] Screen wake / tab regain focus. Fetching fresh orders...');
+        fetchSupabaseOrdersKDS();
+        loadStorageOrders();
+        render();
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleKDSMobileReconnect);
+    window.addEventListener('focus', handleKDSMobileReconnect);
+    window.addEventListener('online', handleKDSMobileReconnect);
+
+    // Initial load
+    fetchSupabaseOrdersKDS();
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRUFFLES KitchenFlow — KDS Live Queue</title>
+  <style>
+    :root {
+      --bg: #FFFFFF;
+      --panel: #F8F6F0;
+      --panel-2: #EFECE6;
+      --line: #E5E2D9;
+      --text: #1F1F1F;
+      --muted: #6B7280;
+      --text-sec: #333333;
+      --orange: #234A3B;
+      --red: #DC2626;
+      --gold: #8B6B4A;
+      --green: #234A3B;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; overflow: hidden; }
+    button { font: inherit; touch-action: manipulation; cursor: pointer; border: none; }
+    .app { height: 100vh; display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 90px; }
+    aside { grid-row: 1 / 3; background: var(--panel); border-right: 1px solid var(--line); padding: 24px 16px; display: flex; flex-direction: column; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--orange); margin-bottom: 24px; letter-spacing: -0.02em; }
+    .brand-mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; background: var(--orange); color: #FFFFFF; font-size: 16px; font-weight: 900; }
+    .eyebrow { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin: 0 4px 12px; }
+    .filters { display: grid; gap: 8px; }
+    .filter { border: 1px solid var(--line); border-radius: 8px; min-height: 48px; padding: 0 12px; background: var(--bg); color: var(--text-sec); display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 600; }
+    .filter.active { background: var(--orange); color: #FFFFFF; border-color: var(--orange); }
+    .badge { min-width: 24px; padding: 2px 8px; border-radius: 999px; text-align: center; background: var(--panel-2); color: var(--text); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+    .filter.active .badge { background: rgba(255,255,255,0.2); color: #FFFFFF; }
+    .connection { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    main { padding: 24px; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 24px; font-weight: 700; }
+    .sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .live { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; color: var(--green); font-size: 12px; font-weight: 700; background: var(--panel); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; overflow-y: auto; flex: 1; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .card.delayed { border-left: 4px solid var(--red); }
+    .card.vip { border-left: 4px solid var(--gold); }
+    .card.ready { border-left: 4px solid var(--green); opacity: 0.8; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .status { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+    .status i { width: 6px; height: 6px; background: var(--orange); border-radius: 50%; } .ready .status i { background: var(--green); }
+    .table { text-align: right; font-size: 24px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .table small { display: block; color: var(--muted); font-size: 10px; font-weight: 400; }
+    .timer { display: flex; justify-content: space-between; align-items: center; background: var(--bg); border-radius: 8px; padding: 8px 12px; font-size: 12px; border: 1px solid var(--line); }
+    .timer strong { color: var(--orange); font-family: 'JetBrains Mono', monospace; font-size: 16px; } .timer.overdue strong { color: var(--red); }
+    .items { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; flex: 1; }
+    .item { display: grid; grid-template-columns: 26px 1fr; gap: 8px; font-size: 14px; }
+    .qty { color: var(--orange); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .item-name { font-weight: 600; color: var(--text); }
+    .pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .pill { color: var(--text-sec); background: var(--panel-2); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+    .instruction { padding: 8px 10px; border-radius: 8px; background: rgba(139,107,74,0.1); border: 1px solid var(--gold); color: var(--gold); font-size: 11px; }
+    .instruction b { display: block; font-size: 10px; letter-spacing: 0.5px; }
+    .ready-btn { margin-top: auto; min-height: 44px; width: 100%; border: 0; border-radius: 8px; background: var(--orange); color: #FFFFFF; font-size: 14px; font-weight: 700; } .ready .ready-btn { background: var(--green); }
+    footer { grid-column: 2; border-top: 1px solid var(--line); background: var(--panel); padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; gap: 16px; }
+    .metric label { color: var(--muted); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .metric b { color: var(--orange); font-family: 'JetBrains Mono', monospace; font-size: 20px; }
+    .metric .item-value { color: var(--text); font-family: inherit; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand"><span class="brand-mark">⌁</span> TRUFFLES KDS</div>
+      <p class="eyebrow">Order filters</p>
+      <nav class="filters" id="filters"></nav>
+      <div class="connection"><span class="dot"></span> Live Shared Sync</div>
+    </aside>
+    <main>
+      <header class="topbar"><div><h1 id="title">All Orders</h1><p class="sub" id="subtitle">Kitchen Display System • Live interlinked feed</p></div><div class="live"><span class="dot"></span> LIVE SYNC ACTIVE</div></header>
+      <section class="grid" id="orderGrid" aria-live="polite"></section>
+    </main>
+    <footer>
+      <div class="metric"><label>Total Orders Today</label><b id="totalOrders">0</b></div>
+      <div class="metric"><label>Current Queue Length</label><b id="queueLength">0</b></div>
+      <div class="metric"><label>Average Prep Time</label><b id="avgPrep">12.4 min</b></div>
+      <div class="metric"><label>Top Item Sold</label><b class="item-value">Chocolate Brownie Sundae</b></div>
+    </footer>
+  </div>
+  <script>
+    // Inter-tab & Inter-port Broadcast Channel Sync Engine
+    const broadcastChannel = new BroadcastChannel('truffles_resto_channel');
+
+    // Web Audio API Synthesizer for Kitchen Order Chime
+    function playNewOrderChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      } catch (e) {}
+    }
+
+    let orders = [];
+    let total = 0;
+    let lastProcessedTs = Date.now() - 2000;
+    const filterDefs = [['all','All'],['preparing','Preparing'],['ready','Ready'],['served','Served']];
+    let active = 'all';
+
+    // Helper to safely parse item tuples [qty, name, customizationsArray]
+    function parseItemTuple(i) {
+      if (!i) return ['1', 'Item', []];
+      const q = String(i.qty || i.quantity || 1);
+      const name = String(i.name || (i.menuItem && i.menuItem.name) || 'Delicious Item');
+      let cust = [];
+      if (Array.isArray(i.customizations)) {
+        cust = i.customizations.map(c => typeof c === 'string' ? c : (c.name || c.option?.name || ''));
+      }
+      return [q, name, cust];
+    }
+
+    // Load active live orders from shared storage on initialization
+    function loadStorageOrders() {
+      try {
+        const sharedRaw = localStorage.getItem("truffles_shared_orders");
+        if (sharedRaw) {
+          const sharedOrders = JSON.parse(sharedRaw);
+          if (Array.isArray(sharedOrders)) {
+            orders = sharedOrders
+              .map(ord => ({
+                id: ord.id,
+                table: ord.tableId || `T${ord.tableNumber || 1}`,
+                status: ord.status === 'Ready' || ord.status === 'ready' ? 'ready' : ord.status === 'Served' || ord.status === 'served' ? 'served' : 'preparing',
+                age: 1,
+                prep: 15,
+                vip: ord.priority === 'high',
+                items: (ord.items || []).map(parseItemTuple),
+                note: ord.notes || ord.specialInstructions || ''
+              }))
+              .filter(o => o.status !== 'served');
+            total = orders.length;
+          }
+        }
+      } catch (e) {}
+    }
+
+    loadStorageOrders();
+
+    function count(key) { return key==='all' ? orders.length : orders.filter(o=>o.status===key).length; }
+
+    function render() {
+      try {
+        const filtersEl = document.getElementById('filters');
+        if (filtersEl) {
+          filtersEl.innerHTML = filterDefs.map(([key,label]) => `<button class="filter ${active===key?'active':''}" onclick="setFilter('${key}')"><span>${label}</span><span class="badge">${count(key)}</span></button>`).join('');
+        }
+        const titleEl = document.getElementById('title');
+        if (titleEl) {
+          titleEl.textContent = filterDefs.find(x=>x[0]===active)[1] + ' Orders';
+        }
+        const shown = active==='all' ? orders : orders.filter(o=>o.status===active);
+        const gridEl = document.getElementById('orderGrid');
+        if (gridEl) {
+          gridEl.innerHTML = shown.length === 0 
+            ? `<div style="grid-column: 1 / -1; text-align: center; padding: 48px; color: var(--muted); font-size: 14px;">No active orders in kitchen queue. Waiting for live orders from Portal / Dashboard...</div>`
+            : shown.map(o => {
+            const isLate = o.age >= o.prep && o.status==='preparing';
+            const classes = `${isLate?'delayed ':''}${o.vip?'vip ':''}${o.status==='ready'?'ready':''}${o.onHold?' on-hold':''}`;
+            const itemList = (o.items || []).map(itemTuple => {
+              const q = itemTuple[0] || '1';
+              const name = itemTuple[1] || 'Item';
+              const pills = Array.isArray(itemTuple[2]) ? itemTuple[2] : [];
+              return `<li class="item"><span class="qty">${q}×</span><div><span class="item-name">${name}</span>${pills.length?`<div class="pills">${pills.map(p=>`<span class="pill">${p}</span>`).join('')}</div>`:''}</div></li>`;
+            }).join('');
+
+            return `<article class="card ${classes}"><div class="card-top"><div class="status"><i></i>${o.onHold?'ON HOLD':o.status}</div><div class="table"><small>TABLE</small>${o.table}</div></div><div class="timer ${isLate?'overdue':''}"><span>PREP TIMER</span><strong data-order="${o.id}">${String(o.age).padStart(2,'0')}:00</strong></div><ul class="items">${itemList}</ul>${o.note?`<div class="instruction"><b>SPECIAL INSTRUCTIONS</b>${o.note}</div>`:''}<div style="display:flex;gap:6px;margin-top:auto;"><button class="hold-btn" style="padding:8px 12px;border-radius:8px;background:#1A1A2E;color:#FACC15;border:1px solid #222233;font-size:12px;font-weight:700;cursor:pointer;" onclick="toggleHold('${o.id}')">${o.onHold?'Resume':'Hold'}</button><button class="ready-btn" style="flex:1;" onclick="markReady('${o.id}')">${o.status==='ready'?'✓ Ready for Service':'Mark Ready'}</button></div></article>`;
+          }).join('');
+        }
+        const qEl = document.getElementById('queueLength');
+        if (qEl) qEl.textContent = orders.filter(o=>o.status==='preparing').length;
+        const totEl = document.getElementById('totalOrders');
+        if (totEl) totEl.textContent = total;
+      } catch (err) {
+        console.error("Render error in KDS:", err);
+      }
+    }
+
+    window.setFilter = f => { active=f; render(); };
+    window.toggleHold = id => {
+      const o = orders.find(x => String(x.id) === String(id));
+      if (o) { o.onHold = !o.onHold; render(); }
+    };
+    window.markReady = id => {
+      const o = orders.find(x => String(x.id) === String(id));
+      if (o) {
+        if (o.status === 'preparing') o.status = 'ready';
+        else if (o.status === 'ready') {
+          o.status = 'served';
+          orders = orders.filter(x => String(x.id) !== String(id));
+          total = orders.length;
+        }
+        render();
+
+        const newStat = o.status === 'ready' ? 'Ready' : o.status === 'served' ? 'Served' : 'Preparing';
+        const eventPayload = { type: 'UPDATE_ORDER_STATUS', orderId: o.id, newStatus: newStat, timestamp: Date.now() };
+
+        try {
+          const sharedRaw = localStorage.getItem('truffles_shared_orders');
+          if (sharedRaw) {
+            const sharedOrders = JSON.parse(sharedRaw);
+            const updatedShared = sharedOrders.map(so => {
+              if (String(so.id) === String(o.id)) {
+                return { ...so, status: newStat };
+              }
+              return so;
+            });
+            localStorage.setItem('truffles_shared_orders', JSON.stringify(updatedShared));
+          }
+        } catch (e) {}
+
+        try { broadcastChannel.postMessage(eventPayload); } catch (e) {}
+        try { localStorage.setItem('truffles_last_event', JSON.stringify(eventPayload)); } catch (e) {}
+      }
+    };
+
+    function processIncomingEvent(data) {
+      if (!data || !data.type) return;
+      if (data.type === 'NEW_ORDER') {
+        const ord = data.order;
+        if (ord && ord.id && !orders.some(o => String(o.id) === String(ord.id))) {
+          orders.unshift({
+            id: ord.id,
+            table: ord.tableId || `T${ord.tableNumber || 1}`,
+            status: 'preparing',
+            age: 1,
+            prep: 15,
+            vip: ord.priority === 'high',
+            items: (ord.items || []).map(parseItemTuple),
+            note: ord.notes || ord.specialInstructions || ''
+          });
+          total = orders.length;
+          playNewOrderChime();
+          render();
+        }
+      } else if (data.type === 'UPDATE_ORDER_STATUS') {
+        const o = orders.find(x => String(x.id) === String(data.orderId));
+        if (o) {
+          if (data.newStatus === 'Ready' || data.newStatus === 'ready') o.status = 'ready';
+          else if (data.newStatus === 'Served' || data.newStatus === 'served') {
+            orders = orders.filter(x => String(x.id) !== String(data.orderId));
+            total = orders.length;
+          }
+          render();
+        }
+      } else if (data.type === 'PAY_ORDER' || data.type === 'PAYMENT_SUCCESS' || data.type === 'TABLE_VACATE' || data.type === 'CANCEL_ORDER') {
+        const tId = String(data.tableId || '');
+        const ordId = String(data.orderId || '');
+        orders = orders.filter(o => {
+          if (ordId && String(o.id) === ordId) return false;
+          if (tId && String(o.table) === tId) return false;
+          return true;
+        });
+        total = orders.length;
+        render();
+      }
+    }
+
+    // Listen to interlinked broadcast channel
+    broadcastChannel.onmessage = (event) => processIncomingEvent(event.data);
+
+    // Also poll localStorage every 500ms for cross-port event synchronization
+    setInterval(() => {
+      try {
+        loadStorageOrders();
+        const raw = localStorage.getItem("truffles_last_event");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.timestamp && parsed.timestamp > lastProcessedTs) {
+            lastProcessedTs = parsed.timestamp;
+            processIncomingEvent(parsed);
+          }
+        }
+        render();
+      } catch (e) {}
+    }, 500);
+
+    setInterval(() => {
+      orders.forEach(o => { if (o.status==='preparing' && !o.onHold) o.age++; });
+      document.querySelectorAll('[data-order]').forEach(el => {
+        const o = orders.find(x => String(x.id) === String(el.dataset.order));
+        if (o) el.textContent = String(o.age).padStart(2,'0') + ':00';
+      });
+    }, 60000);
+
+    render();
+  </script>
+</body>
+</html>

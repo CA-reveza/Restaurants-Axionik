@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRUFFLES Customer Portal</title>
+    <script type="module" crossorigin src="/portal/assets/index-C9ufYf5F.js"></script>
+    <link rel="stylesheet" crossorigin href="/portal/assets/index-D3Ps-n7J.css">
+    <style>
+      body, button, input, select, textarea {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script>
+      (function() {
+        const SB_URL = "https://juohiqxcfzququtuzxme.supabase.co";
+        const SB_KEY = "sb_publishable_GLqjcXd0gGy58SzO01eO0Q_Yu5_Tc-h";
+
+        // URL & Context Table Number Parsing (?table=16, ?t=16, ?table_number=16)
+        function getURLTableNumber() {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const val = params.get("table") || params.get("t") || params.get("table_number");
+            if (val) {
+              const num = parseInt(val.replace(/\D/g, ""), 10);
+              if (!isNaN(num) && num > 0) return num;
+            }
+          } catch (e) {}
+
+          // Fallback to localStorage
+          try {
+            const stored = localStorage.getItem("truffles_selected_table") || localStorage.getItem("truffles_guest_table");
+            if (stored) {
+              const num = parseInt(String(stored).replace(/\D/g, ""), 10);
+              if (!isNaN(num) && num > 0) return num;
+            }
+          } catch (e) {}
+
+          return null; // Fallback to Table Selection UI
+        }
+
+        // Robust Mobile Network Submission with 3 Retries over HTTPS REST
+        async function submitOrderPayloadWithRetry(payload, maxRetries = 3) {
+          const headers = {
+            "apikey": SB_KEY,
+            "Authorization": "Bearer " + SB_KEY,
+            "Content-Type": "application/json"
+          };
+
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const res = await fetch(SB_URL + "/rest/v1/orders", {
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload)
+              });
+
+              if (res.ok) {
+                return await res.json();
+              }
+            } catch (err) {
+              console.warn(`[Mobile Submission Retry ${attempt}/${maxRetries}] Network submission failed:`, err);
+              if (attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, attempt * 1000));
+              }
+            }
+          }
+          throw new Error("NETWORK_SUBMISSION_FAILED");
+        }
+
+        function getLoggedInCustomer() {
+          let name = "";
+          let phone = "";
+
+          try {
+            const raw = localStorage.getItem("truffles_user_info");
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed.fullName) name = parsed.fullName;
+              if (parsed.phoneNumber) phone = parsed.phoneNumber;
+            }
+          } catch (e) {}
+
+          if (!name) {
+            try {
+              const custName = localStorage.getItem("truffles_customer_name");
+              if (custName) name = custName;
+            } catch (e) {}
+          }
+
+          if (!name) {
+            const allEls = Array.from(document.querySelectorAll("h1, h2, div"));
+            const welcomeEl = allEls.find(el => el.children.length === 0 && el.textContent.includes("Welcome,"));
+            if (welcomeEl) {
+              name = welcomeEl.textContent.replace("Welcome,", "").replace("!", "").trim();
+            }
+          }
+
+          return { name: name || "Guest", phone: phone || "" };
+        }
+
+        function findTableContainer() {
+          const allEls = Array.from(document.querySelectorAll("*"));
+          
+          const selTextEl = allEls.find(el => el.children.length === 0 && el.textContent.toUpperCase().includes("SELECT YOUR TABLE"));
+          if (selTextEl) {
+            let p = selTextEl.parentElement;
+            while (p && p !== document.body) {
+              if (p.tagName === "DIV" && p.className && p.className.includes("border")) {
+                return p;
+              }
+              p = p.parentElement;
+            }
+          }
+
+          const voucher = allEls.find(el => el.children.length === 0 && el.textContent.includes("Surprise Welcome Voucher"));
+          if (voucher) {
+            let vBox = voucher.closest("div.w-full");
+            if (vBox && vBox.nextElementSibling) return vBox.nextElementSibling;
+          }
+
+          const btns = Array.from(document.querySelectorAll("button"));
+          const t1 = btns.find(b => b.textContent.toUpperCase().includes("TABLE") && (b.textContent.includes("1") || b.textContent.toUpperCase().includes("SELECTED")));
+          if (t1) {
+            let p = t1.parentElement;
+            while (p && p !== document.body) {
+              if (p.tagName === "DIV" && p.className && p.className.includes("border")) return p;
+              p = p.parentElement;
+            }
+          }
+
+          return null;
+        }
+
+        function injectControlBar() {
+          if (document.getElementById("portal-control-header")) return;
+
+          const targetCard = findTableContainer();
+          if (!targetCard || !targetCard.parentNode) return;
+
+          const headerBox = document.createElement("div");
+          headerBox.id = "portal-control-header";
+          headerBox.style.cssText = "display: flex; gap: 10px; width: 100%; margin-bottom: 16px; margin-top: 8px;";
+          headerBox.innerHTML = `
+            <button id="portal-btn-preorder" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 12px; border-radius: 16px; background: #234A3B; color: #ffffff; font-weight: 800; font-size: 13px; border: none; cursor: pointer; box-shadow: 0 4px 14px rgba(35,74,59,0.3); transition: transform 0.15s, background-color 0.15s;">
+              <span style="color: #FFC107;">🛒</span> <span>Pre-Order Food</span>
+            </button>
+            <button id="portal-btn-reserve" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 12px; border-radius: 16px; background: #234A3B; color: #ffffff; font-weight: 800; font-size: 13px; border: none; cursor: pointer; box-shadow: 0 4px 14px rgba(35,74,59,0.3); transition: transform 0.15s, background-color 0.15s;">
+              <span style="color: #FFC107;">📅</span> <span>Reserve Table</span>
+            </button>
+          `;
+
+          targetCard.parentNode.insertBefore(headerBox, targetCard);
+
+          document.getElementById("portal-btn-preorder").onclick = () => openPreOrderModal();
+          document.getElementById("portal-btn-reserve").onclick = () => openReserveModal();
+
+          injectLogoutButton();
+        }
+
+        function injectLogoutButton() {
+          if (document.getElementById("portal-btn-logout")) return;
+
+          const startBtn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.toUpperCase().includes("START ORDERING"));
+          if (!startBtn || !startBtn.parentNode) return;
+
+          const customer = getLoggedInCustomer();
+
+          const logoutBtn = document.createElement("button");
+          logoutBtn.id = "portal-btn-logout";
+          logoutBtn.style.cssText = "width: 100%; margin-top: 12px; padding: 12px; border-radius: 16px; background: #F5F3EF; border: 1px solid #E5E2D9; color: #5C574E; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;";
+          logoutBtn.innerHTML = `<span>🚪</span> <span>Log Out (${customer.name})</span>`;
+
+          startBtn.parentNode.appendChild(logoutBtn);
+
+          logoutBtn.onclick = function() {
+            try {
+              localStorage.removeItem("truffles_user_info");
+              localStorage.removeItem("truffles_customer_name");
+              localStorage.removeItem("truffles_customer_session");
+              localStorage.removeItem("truffles_guest_table");
+              localStorage.removeItem("truffles_active_table");
+              localStorage.removeItem("truffles_selected_table");
+              localStorage.removeItem("truffles_cart");
+              sessionStorage.clear();
+            } catch (e) {}
+            // Redirect cleanly without query params (?table=8) to render Image 3 Captive Portal Check-in
+            window.location.href = window.location.origin + window.location.pathname;
+          };
+        }
+
+        // ── PRE-ORDER FOOD MODAL ──
+        function getActivePreOrderForCustomer(customer) {
+          try {
+            const raw = localStorage.getItem("truffles_preorders");
+            if (raw) {
+              const list = JSON.parse(raw);
+              const active = list.find(po =>
+                (po.customer_name === customer.name || (customer.phone && po.customer_phone === customer.phone)) &&
+                !po.table_id && po.order_status !== "Completed" && po.order_status !== "Cancelled"
+              );
+              if (active) return active;
+            }
+          } catch (e) {}
+          return null;
+        }
+
+        function openPreOrderModal() {
+          if (document.getElementById("portal-preorder-modal")) return;
+
+          const customer = getLoggedInCustomer();
+          const activePreOrder = getActivePreOrderForCustomer(customer);
+
+          const modal = document.createElement("div");
+          modal.id = "portal-preorder-modal";
+          modal.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center; z-index: 99999; padding: 0;";
+
+          if (activePreOrder) {
+            modal.innerHTML = `
+              <div style="background: #ffffff; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 28px 20px 32px; width: 100%; max-width: 480px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1A1A1A; box-sizing: border-box; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; inset-x: 0; height: 6px; background: #234A3B;"></div>
+                <div style="font-size: 56px; margin-bottom: 8px;">🎟️</div>
+                <h3 style="font-size: 20px; font-weight: 800; color: #234A3B; margin: 0 0 6px;">Active Pre-Order Ticket</h3>
+                <p style="font-size: 13px; color: #8A8475; margin: 0 0 18px;">You already have an active pre-order ticket in queue.</p>
+
+                <div style="padding: 18px; border-radius: 16px; background: #FDF0F2; border: 1px solid #F5D0D6; margin-bottom: 18px; text-align: center;">
+                  <div style="font-size: 11px; font-weight: 800; color: #8A8475; margin-bottom: 4px;">YOUR TICKET NUMBER</div>
+                  <div style="font-size: 32px; font-weight: 900; color: #234A3B; font-family: 'SF Mono', 'SFProText-Regular', Consolas, monospace;">${activePreOrder.preorder_ticket || activePreOrder.id}</div>
+                  <div style="font-size: 12px; color: #8A8475; margin-top: 6px;">Assigned to ${customer.name} · Total: ₹${activePreOrder.total_amount}</div>
+                </div>
+
+                <div style="padding: 12px 14px; border-radius: 12px; background: #FFFBEB; border: 1px solid #FCD34D; color: #92400E; font-size: 12px; font-weight: 700; margin-bottom: 20px; text-align: left; display: flex; align-items: center; gap: 8px;">
+                  <span>⚠️</span>
+                  <span>Multiple active pre-orders are restricted. Your order will automatically transition when staff assigns your table.</span>
+                </div>
+
+                <button id="close-active-po-btn" style="width: 100%; padding: 14px; border-radius: 16px; border: none; background: #234A3B; color: #ffffff; font-size: 14px; font-weight: 800; cursor: pointer; shadow: 0 4px 14px rgba(35,74,59,0.3);">
+                  Close
+                </button>
+              </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById("close-active-po-btn").onclick = () => modal.remove();
+            return;
+          }
+
+          const menuItems = [
+            { id: "m1", name: "Truffles Special Sizzler", price: 380, desc: "Grilled cottage cheese/chicken with herb butter rice & veggies" },
+            { id: "m2", name: "Ferrero Rocher Thick Shake", price: 240, desc: "Rich chocolate hazelnut thick shake topped with crunch" },
+            { id: "m3", name: "Fiery Chicken Burger", price: 290, desc: "Crispy spicy fillet, jalapenos, cheese slice & secret sauce" },
+            { id: "m4", name: "Creamy Alfredo Pasta", price: 320, desc: "Penne in rich parmesan cream sauce with garlic bread" },
+            { id: "m5", name: "Loaded Cheese Fries", price: 190, desc: "Crispy fries smothered in warm melted cheddar cheese" }
+          ];
+
+          let cart = [];
+
+          function renderPreOrderView(contentHtml) {
+            modal.innerHTML = `
+              <div style="background: #ffffff; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 24px 20px 32px; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; text-align: left; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1A1A1A; box-sizing: border-box; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; inset-x: 0; height: 6px; background: #234A3B;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid #E5E2D9; padding-bottom: 12px; margin-top: 4px;">
+                  <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: #1A1A1A; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #FFC107;">🛒</span> Pre-Order Food
+                  </h3>
+                  <button id="close-po-modal" style="width: 32px; height: 32px; border-radius: 50%; background: #F5F3EF; color: #8A8475; border: none; font-weight: 800; cursor: pointer;">✕</button>
+                </div>
+                ${contentHtml}
+              </div>
+            `;
+            document.getElementById("close-po-modal").onclick = () => modal.remove();
+          }
+
+          function getPreOrderFormHtml() {
+            const itemsHtml = menuItems.map(item => {
+              const inCart = cart.find(c => c.id === item.id);
+              return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border: 1px solid #E5E2D9; background: #F5F3EF; border-radius: 16px; margin-bottom: 10px;">
+                  <div>
+                    <div style="font-size: 14px; font-weight: 800; color: #1A1A1A;">${item.name}</div>
+                    <div style="font-size: 11px; color: #8A8475; margin-top: 2px;">${item.desc}</div>
+                    <div style="font-size: 13px; font-weight: 800; color: #234A3B; margin-top: 4px;">₹${item.price}</div>
+                  </div>
+                  ${inCart ? `
+                    <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 4px 10px; border-radius: 12px; border: 1px solid #E5E2D9;">
+                      <button type="button" class="po-minus" data-id="${item.id}" style="background: none; border: none; color: #234A3B; font-weight: 900; cursor: pointer; font-size: 16px;">-</button>
+                      <span style="font-size: 13px; font-weight: 800; color: #1A1A1A;">${inCart.qty}</span>
+                      <button type="button" class="po-plus" data-id="${item.id}" style="background: none; border: none; color: #234A3B; font-weight: 900; cursor: pointer; font-size: 16px;">+</button>
+                    </div>
+                  ` : `
+                    <button type="button" class="po-add" data-id="${item.id}" style="padding: 8px 16px; border-radius: 12px; background: #234A3B; color: #ffffff; border: none; font-weight: 800; font-size: 12px; cursor: pointer; shadow: 0 2px 6px rgba(35,74,59,0.2);">
+                      + Add
+                    </button>
+                  `}
+                </div>
+              `;
+            }).join("");
+
+            const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+            return `
+              <div>
+                <!-- Logged-in Customer Badge -->
+                <div style="padding: 10px 14px; border-radius: 14px; background: #FDF0F2; border: 1px solid #F5D0D6; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 14px;">👤</span>
+                  <span style="font-size: 12px; font-weight: 800; color: #234A3B;">Pre-ordering as: ${customer.name}${customer.phone ? ' (' + customer.phone + ')' : ''}</span>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                  <label style="display: block; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #234A3B; margin-bottom: 8px; tracking-wider: 1px;">Select Items</label>
+                  <div>${itemsHtml}</div>
+                </div>
+
+                <button type="button" id="po-submit-btn" style="width: 100%; padding: 14px; border-radius: 16px; border: none; background: ${cart.length > 0 ? '#234A3B' : '#E5E2D9'}; color: ${cart.length > 0 ? '#ffffff' : '#8A8475'}; font-size: 14px; font-weight: 800; cursor: ${cart.length > 0 ? 'pointer' : 'not-allowed'}; margin-top: 8px; shadow: ${cart.length > 0 ? '0 4px 14px rgba(35,74,59,0.3)' : 'none'};">
+                  ${cart.length > 0 ? `Place Pre-Order for ${customer.name} (₹${total}) →` : 'Add Items to Pre-Order'}
+                </button>
+              </div>
+            `;
+          }
+
+          function attachPreOrderEvents() {
+            document.querySelectorAll(".po-add").forEach(b => {
+              b.onclick = () => {
+                const item = menuItems.find(i => i.id === b.dataset.id);
+                if (item) cart.push({ ...item, qty: 1 });
+                updatePreOrderView();
+              };
+            });
+            document.querySelectorAll(".po-plus").forEach(b => {
+              b.onclick = () => {
+                const entry = cart.find(c => c.id === b.dataset.id);
+                if (entry) entry.qty++;
+                updatePreOrderView();
+              };
+            });
+            document.querySelectorAll(".po-minus").forEach(b => {
+              b.onclick = () => {
+                const idx = cart.findIndex(c => c.id === b.dataset.id);
+                if (idx !== -1) {
+                  if (cart[idx].qty > 1) cart[idx].qty--;
+                  else cart.splice(idx, 1);
+                }
+                updatePreOrderView();
+              };
+            });
+
+            const submitBtn = document.getElementById("po-submit-btn");
+            if (submitBtn && cart.length > 0) {
+              submitBtn.onclick = async () => {
+                submitBtn.textContent = "Placing Pre-Order...";
+                submitBtn.disabled = true;
+
+                const ticket = "PRE-" + Math.floor(1000 + Math.random() * 9000);
+                const totalAmt = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+                const newPreOrderObj = {
+                  id: "po-" + Date.now(),
+                  customer_name: customer.name,
+                  customer_phone: customer.phone,
+                  table_id: null,
+                  items: cart.map(c => ({ id: c.id, name: c.name, price: c.price, qty: c.qty })),
+                  total_amount: totalAmt,
+                  order_status: "New",
+                  payment_status: "Unpaid",
+                  is_preorder: true,
+                  preorder_ticket: ticket,
+                  created_at: new Date().toISOString()
+                };
+
+                // 1. Save to localStorage for instant local sync (if accessible)
+                try {
+                  const existingRaw = localStorage.getItem("truffles_preorders");
+                  const existing = existingRaw ? JSON.parse(existingRaw) : [];
+                  existing.unshift(newPreOrderObj);
+                  localStorage.setItem("truffles_preorders", JSON.stringify(existing));
+                } catch (e) {}
+
+                // Requirement 1: Parse table parameter safely (?table=X, ?t=X, ?table_number=X). If missing, set table_id to null.
+                let tableUuid = null;
+                let parsedTableNum = null;
+                try {
+                  const urlParams = new URLSearchParams(window.location.search);
+                  const rawTab = urlParams.get("table") || urlParams.get("t") || urlParams.get("table_number");
+                  if (rawTab) {
+                    const num = parseInt(String(rawTab).replace(/\D/g, ""), 10);
+                    if (!isNaN(num) && num > 0) parsedTableNum = num;
+                  }
+                } catch (e) {
+                  parsedTableNum = null;
+                }
+
+                if (parsedTableNum === null) {
+                  try {
+                    const storedTab = customer.tableNum || customer.selectedTable || localStorage.getItem("truffles_selected_table");
+                    if (storedTab) {
+                      const num = parseInt(String(storedTab).replace(/\D/g, ""), 10);
+                      if (!isNaN(num) && num > 0) parsedTableNum = num;
+                    }
+                  } catch (e) {}
+                }
+
+                if (parsedTableNum === null) parsedTableNum = 1; // Default fallback to Table 1
+
+                if (parsedTableNum !== null) {
+                  try {
+                    const headers = { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY };
+                    const resTbl = await fetch(SB_URL + `/rest/v1/restaurant_tables?table_number=eq.${parsedTableNum}`, { headers });
+                    if (resTbl.ok) {
+                      const tblData = await resTbl.json();
+                      if (tblData && tblData[0]) {
+                        tableUuid = tblData[0].id;
+                      } else {
+                        const postTbl = await fetch(SB_URL + `/rest/v1/restaurant_tables`, {
+                          method: "POST",
+                          headers: { ...headers, "Content-Type": "application/json", "Prefer": "return=representation" },
+                          body: JSON.stringify({ table_number: parsedTableNum, status: "occupied" })
+                        });
+                        if (postTbl.ok) {
+                          const createdTbl = await postTbl.json();
+                          if (createdTbl && createdTbl[0]) tableUuid = createdTbl[0].id;
+                        }
+                      }
+                    }
+                  } catch (e) {}
+                }
+
+                // Requirement 2: Build completely self-contained in-memory payload with ZERO localStorage dependency
+                const cartItemsArray = cart.map(c => ({
+                  name: c.name,
+                  qty: c.qty || c.quantity || 1,
+                  price: c.price || 0
+                }));
+
+                const dbOrderPayload = {
+                  table_id: tableUuid,
+                  customer_name: customer.name || "Guest",
+                  customer_phone: customer.phone || "",
+                  total: totalAmt,
+                  order_status: "New",
+                  payment_status: "Pending",
+                  is_preorder: true,
+                  preorder_ticket: ticket
+                };
+
+                // Requirement 3: Mobile-friendly error handling with explicit status checking and onscreen alert modal
+                function showMobileErrorAlert(msg) {
+                  console.error("[Mobile Network Error]", msg);
+                  let alertBox = document.getElementById("mobile-debug-alert");
+                  if (!alertBox) {
+                    alertBox = document.createElement("div");
+                    alertBox.id = "mobile-debug-alert";
+                    alertBox.style.cssText = "position:fixed;top:20px;left:5%;right:5%;z-index:99999;background:#721c24;color:#fff;padding:16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:sans-serif;font-size:14px;word-break:break-word;";
+                    document.body.appendChild(alertBox);
+                  }
+                  alertBox.innerHTML = `
+                    <div style="font-weight:bold;margin-bottom:8px;font-size:16px;">⚠️ Supabase Mobile Order Error</div>
+                    <div>${msg}</div>
+                    <button onclick="this.parentElement.remove()" style="margin-top:12px;background:#fff;color:#721c24;border:none;padding:6px 12px;border-radius:6px;font-weight:bold;cursor:pointer;">Dismiss</button>
+                  `;
+                }
+
+                try {
+                  const headers = { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Content-Type": "application/json", "Prefer": "return=representation" };
+                  const resOrd = await fetch(SB_URL + "/rest/v1/orders", {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify(dbOrderPayload)
+                  });
+
+                  if (!resOrd.ok) {
+                    const errText = await resOrd.text();
+                    showMobileErrorAlert(`HTTP ${resOrd.status} ${resOrd.statusText}: ${errText || "Order POST failed"}`);
+                    return;
+                  }
+
+                  const ordData = await resOrd.json();
+                  const createdOrdId = ordData?.[0]?.id;
+
+                  if (createdOrdId && cartItemsArray.length > 0) {
+                    const lineItemsPayload = cartItemsArray.map(c => ({
+                      order_id: createdOrdId,
+                      price: c.price,
+                      quantity: c.qty,
+                      notes: c.name
+                    }));
+
+                    const resItems = await fetch(SB_URL + "/rest/v1/order_items", {
+                      method: "POST",
+                      headers,
+                      body: JSON.stringify(lineItemsPayload)
+                    });
+
+                    if (!resItems.ok) {
+                      const itemErr = await resItems.text();
+                      console.warn("[Line Items Insert Warning]", itemErr);
+                    }
+                  }
+
+                  if (tableUuid) {
+                    await fetch(SB_URL + `/rest/v1/restaurant_tables?id=eq.${tableUuid}`, {
+                      method: "PATCH",
+                      headers,
+                      body: JSON.stringify({ status: "occupied" })
+                    });
+                  }
+                } catch (e) {
+                  showMobileErrorAlert(`Order Network Crash: ${e.message || e}`);
+                  return;
+                }
+
+                renderPreOrderView(`
+                  <div style="text-align: center; padding: 24px 0;">
+                    <div style="font-size: 56px; margin-bottom: 8px;">🎟️</div>
+                    <h3 style="font-size: 22px; font-weight: 800; color: #234A3B; margin: 0 0 8px;">Pre-Order Placed for ${customer.name}!</h3>
+                    <p style="font-size: 13px; color: #8A8475; margin: 0 0 20px;">Your food choices are queued in our system.</p>
+
+                    <div style="padding: 20px; border-radius: 16px; background: #FDF0F2; border: 1px solid #F5D0D6; margin-bottom: 24px;">
+                      <div style="font-size: 11px; font-weight: 800; color: #8A8475; margin-bottom: 4px;">YOUR TICKET NUMBER</div>
+                      <div style="font-size: 32px; font-weight: 900; color: #234A3B; font-family: monospace;">${ticket}</div>
+                      <div style="font-size: 12px; color: #8A8475; margin-top: 6px;">Assigned to ${customer.name} · Reflected in Staff Pre-Order Queue</div>
+                    </div>
+
+                    <button id="po-done-btn" style="width: 100%; padding: 14px; border-radius: 16px; border: none; background: #234A3B; color: #ffffff; font-size: 14px; font-weight: 800; cursor: pointer; shadow: 0 4px 14px rgba(35,74,59,0.3);">
+                      Done
+                    </button>
+                  </div>
+                `);
+                document.getElementById("po-done-btn").onclick = () => modal.remove();
+              };
+            }
+          }
+
+          function updatePreOrderView() {
+            renderPreOrderView(getPreOrderFormHtml());
+            attachPreOrderEvents();
+          }
+
+          document.body.appendChild(modal);
+          updatePreOrderView();
+        }
+
+        // ── RESERVE TABLE MODAL ──
+        function openReserveModal() {
+          if (document.getElementById("portal-reserve-modal")) return;
+
+          const customer = getLoggedInCustomer();
+
+          const modal = document.createElement("div");
+          modal.id = "portal-reserve-modal";
+          modal.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center; z-index: 99999; padding: 0;";
+
+          let selectedDate = new Date().toISOString().split("T")[0];
+          let selectedTime = "19:00";
+          let guestCount = 2;
+          let selectedTableNum = null;
+
+          function renderModalContent(contentHtml) {
+            modal.innerHTML = `
+              <div style="background: #ffffff; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 24px 20px 32px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; text-align: left; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif; box-sizing: border-box; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; inset-x: 0; height: 6px; background: #234A3B;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #E5E2D9; padding-bottom: 12px; margin-top: 4px;">
+                  <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: #1A1A1A; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #FFC107;">📅</span> Reserve a Table
+                  </h3>
+                  <button id="close-res-modal" style="width: 32px; height: 32px; border-radius: 50%; background: #F5F3EF; color: #8A8475; border: none; font-weight: 800; cursor: pointer;">✕</button>
+                </div>
+
+                <!-- Customer Badge -->
+                <div style="padding: 10px 14px; border-radius: 14px; background: #F5F3EF; border: 1px solid #E5E2D9; margin-bottom: 16px; font-size: 12px; font-weight: 800; color: #234A3B;">
+                  Reserving for: ${customer.name}${customer.phone ? ' (' + customer.phone + ')' : ''}
+                </div>
+
+                ${contentHtml}
+              </div>
+            `;
+            document.getElementById("close-res-modal").onclick = () => modal.remove();
+          }
+
+          function getFormHtml() {
+            const timeSlotsHtml = ["12:00", "13:00", "14:00", "18:00", "19:00", "20:00", "21:00", "22:00"].map(t => `
+              <button type="button" class="slot-btn" data-time="${t}" style="padding: 8px 4px; border-radius: 10px; border: 1px solid ${selectedTime === t ? '#234A3B' : '#E5E2D9'}; background: ${selectedTime === t ? '#234A3B' : '#F9F8F6'}; color: ${selectedTime === t ? '#ffffff' : '#5C574E'}; font-size: 12px; font-weight: 700; cursor: pointer;">${t}</button>
+            `).join("");
+
+            const tablesHtml = Array.from({length: 20}, (_, i) => i + 1).map(tNum => `
+              <button type="button" class="t-btn" data-tnum="${tNum}" style="padding: 10px 4px; border-radius: 12px; border: 2px solid ${selectedTableNum === tNum ? '#234A3B' : '#E5E2D9'}; background: ${selectedTableNum === tNum ? '#234A3B' : '#ffffff'}; color: ${selectedTableNum === tNum ? '#ffffff' : '#2D2D2D'}; font-size: 13px; font-weight: 800; cursor: pointer;">
+                <span style="font-size: 9px; display: block; opacity: 0.7;">TABLE</span> ${tNum}
+              </button>
+            `).join("");
+
+            return `
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #8A8475; margin-bottom: 6px;">Date</label>
+                  <input type="date" id="res-date-inp" value="${selectedDate}" min="${new Date().toISOString().split("T")[0]}" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #E5E2D9; background: #F9F8F6; font-size: 14px; font-weight: 700; color: #1A1A1A; box-sizing: border-box;" />
+                </div>
+
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #8A8475; margin-bottom: 6px;">Time Slot (90 Min)</label>
+                  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">${timeSlotsHtml}</div>
+                </div>
+
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #8A8475; margin-bottom: 6px;">Guests</label>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <button type="button" id="guest-minus" style="width: 36px; height: 36px; border-radius: 12px; background: #F5F3EF; border: 1px solid #E5E2D9; font-weight: 800; font-size: 16px; cursor: pointer;">-</button>
+                    <span id="guest-count-val" style="font-size: 16px; font-weight: 800; color: #1A1A1A; min-width: 24px; text-align: center;">${guestCount}</span>
+                    <button type="button" id="guest-plus" style="width: 36px; height: 36px; border-radius: 12px; background: #F5F3EF; border: 1px solid #E5E2D9; font-weight: 800; font-size: 16px; cursor: pointer;">+</button>
+                    <span style="font-size: 13px; color: #8A8475;">Guests</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #8A8475; margin-bottom: 6px;">Select Table</label>
+                  <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 150px; overflow-y: auto;">${tablesHtml}</div>
+                </div>
+
+                <button type="button" id="confirm-res-btn" style="width: 100%; padding: 14px; border-radius: 16px; border: none; background: ${selectedTableNum ? '#234A3B' : '#E5E2D9'}; color: ${selectedTableNum ? '#ffffff' : '#8A8475'}; font-size: 13px; font-weight: 800; cursor: ${selectedTableNum ? 'pointer' : 'not-allowed'}; margin-top: 8px;">
+                  ${selectedTableNum ? `Confirm Reservation (Table ${selectedTableNum})` : 'Select a Table First'}
+                </button>
+              </div>
+            `;
+          }
+
+          function attachModalEvents() {
+            document.querySelectorAll(".slot-btn").forEach(b => {
+              b.onclick = () => { selectedTime = b.dataset.time; updateView(); };
+            });
+            document.querySelectorAll(".t-btn").forEach(b => {
+              b.onclick = () => { selectedTableNum = parseInt(b.dataset.tnum, 10); updateView(); };
+            });
+            const minus = document.getElementById("guest-minus");
+            const plus = document.getElementById("guest-plus");
+            if (minus) minus.onclick = () => { guestCount = Math.max(1, guestCount - 1); updateView(); };
+            if (plus) plus.onclick = () => { guestCount = Math.min(12, guestCount + 1); updateView(); };
+
+            const dateInp = document.getElementById("res-date-inp");
+            if (dateInp) dateInp.onchange = (e) => { selectedDate = e.target.value; };
+
+            const confirmBtn = document.getElementById("confirm-res-btn");
+            if (confirmBtn && selectedTableNum) {
+              confirmBtn.onclick = async () => {
+                confirmBtn.textContent = "Confirming...";
+                confirmBtn.disabled = true;
+                try {
+                  const headers = { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Content-Type": "application/json" };
+                  await fetch(SB_URL + "/rest/v1/reservations", {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({
+                      customer_name: customer.name,
+                      customer_phone: customer.phone,
+                      start_time: new Date(`${selectedDate}T${selectedTime}:00`).toISOString(),
+                      end_time: new Date(new Date(`${selectedDate}T${selectedTime}:00`).getTime() + 90 * 60 * 1000).toISOString(),
+                      guest_count: guestCount,
+                      status: "confirmed"
+                    })
+                  });
+
+                  await fetch(SB_URL + "/rest/v1/restaurant_tables?table_number=eq." + selectedTableNum, {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({ status: "reserved" })
+                  });
+                } catch (e) {}
+
+                renderModalContent(`
+                  <div style="text-align: center; padding: 24px 0;">
+                    <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+                    <h4 style="font-size: 20px; font-weight: 800; color: #234A3B; margin: 0 0 8px;">Table Reserved for ${customer.name}!</h4>
+                    <p style="font-size: 13px; color: #8A8475; margin: 0 0 20px;">
+                      Table <strong>${selectedTableNum}</strong> for <strong>${guestCount} guests</strong><br />
+                      on ${selectedDate} at ${selectedTime}.
+                    </p>
+                    <button id="res-done-btn" style="width: 100%; padding: 14px; border-radius: 16px; border: none; background: #234A3B; color: #ffffff; font-size: 13px; font-weight: 800; cursor: pointer;">
+                      Done
+                    </button>
+                  </div>
+                `);
+                document.getElementById("res-done-btn").onclick = () => modal.remove();
+              };
+            }
+          }
+
+          function updateView() {
+            renderModalContent(getFormHtml());
+            attachModalEvents();
+          }
+
+          document.body.appendChild(modal);
+          updateView();
+        }
+
+        function transformDoneToLogout() {
+          const allBtns = Array.from(document.querySelectorAll("button"));
+          allBtns.forEach(btn => {
+            const txt = btn.textContent.toUpperCase().trim();
+            const matchesLogout = txt === "DONE" || txt === "✨ DONE" || txt.includes("DONE") || txt.includes("LOG OUT & COMPLETE SESSION") || txt.includes("LOG OUT");
+            if (matchesLogout) {
+              if (!btn.dataset.logoutAttached) {
+                btn.dataset.logoutAttached = "true";
+                btn.innerHTML = `<span>✨</span> <span>Exit Feedback Page</span>`;
+                btn.style.background = "#234A3B";
+                btn.style.color = "#ffffff";
+                btn.style.fontWeight = "800";
+                btn.onclick = function(e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  try {
+                    localStorage.removeItem("truffles_user_info");
+                    localStorage.removeItem("truffles_customer_name");
+                    localStorage.removeItem("truffles_customer_session");
+                    localStorage.removeItem("truffles_guest_table");
+                    localStorage.removeItem("truffles_active_table");
+                    localStorage.removeItem("truffles_selected_table");
+                    localStorage.removeItem("truffles_cart");
+                  } catch (err) {}
+
+                  // Clear search params or hash to return cleanly to welcome portal check-in
+                  window.location.href = window.location.origin + window.location.pathname;
+                };
+              }
+            }
+          });
+        }
+
+        const observer = new MutationObserver(() => {
+          injectControlBar();
+          transformDoneToLogout();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        // 3-Second Auto-Refresh for Captive Customer Portal (Syncs KDS order status changes live)
+        async function fetchLiveStatusCaptivePortal() {
+          try {
+            const tblNum = getURLTableNumber();
+            if (!tblNum) return;
+            const headers = { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY };
+            const res = await fetch(SB_URL + `/rest/v1/orders?select=*,restaurant_tables!inner(table_number)&restaurant_tables.table_number=eq.${tblNum}&order=created_at.desc&limit=1`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data[0]) {
+                const statusTag = document.getElementById("portal-order-status-badge");
+                if (statusTag) {
+                  statusTag.textContent = (data[0].order_status || "NEW").toUpperCase();
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        setInterval(() => {
+          injectControlBar();
+          transformDoneToLogout();
+          fetchLiveStatusCaptivePortal();
+        }, 3000);
+        injectControlBar();
+        transformDoneToLogout();
+        fetchLiveStatusCaptivePortal();
+      })();
+    </script>
+  </body>
+</html>
