@@ -1,0 +1,87 @@
+# Render Blueprint — deploys ONE unified React build to 3 static sites.
+#
+# WHY ONE BUILD INSTEAD OF THE 3-ENTRY SETUP: src/context/RestoContext.jsx
+# already auto-detects which screen to show based on the deployed hostname:
+#   - hostname contains "captive-portal"  -> customer ordering screen
+#   - hostname contains "kds-dashboard"   -> kitchen display screen
+#   - hostname contains "pos-dashboard"   -> admin/staff dashboard (default)
+# (see RestoContext.jsx's activeTab initializer). That means the SAME build
+# output, deployed 3 times under 3 differently-named services, correctly
+# self-routes with zero extra server-side path config — no per-service
+# rewrite target needed beyond the standard SPA fallback to /index.html.
+#
+# This intentionally does NOT deploy public/kds/index.html or
+# public/portal/index.html. Those are legacy artifacts discovered during
+# this optimization pass:
+#   - public/kds/index.html is a fully separate, hand-written vanilla-JS
+#     mini-app with a Supabase key hardcoded directly into static HTML
+#     (no env var mechanism — can't be rotated without editing the file).
+#   - public/portal/index.html references a FROZEN, pre-built JS bundle
+#     (public/portal/assets/index-*.js) committed at some point in the
+#     past — it does NOT rebuild from current source, so any code changes
+#     since that bundle was generated will not appear there.
+# Both are still present in the repo and still power the existing Vercel
+# subdomains (vercel.kds.json / vercel.portal.json) if you want to keep
+# using them — this blueprint just doesn't route Render traffic to them,
+# since neither reflects the current, optimized codebase.
+#
+# IMPORTANT — service names matter here, not just the label shown in the
+# dashboard: Render exposes each service at https://<name>.onrender.com, and
+# the hostname substring is exactly what RestoContext.jsx checks. Keep the
+# names below (or something else containing "pos-dashboard" /
+# "kds-dashboard" / "captive-portal") or the auto-routing won't trigger and
+# every service will fall back to the default admin dashboard screen.
+#
+# To deploy: commit this file to the repo root, then in the Render
+# Dashboard go to New > Blueprint, connect this repo/branch, and Apply.
+# You'll be prompted once per service for VITE_SUPABASE_URL and
+# VITE_SUPABASE_ANON_KEY (sync: false below so they're entered as secrets
+# in the dashboard, not committed to the repo). Vite bakes these into the
+# built JS at build time, so they must be set before the first build runs
+# — the Blueprint prompts handle that automatically.
+
+services:
+  - type: web
+    name: pos-dashboard
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: kds-dashboard
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: captive-portal
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
