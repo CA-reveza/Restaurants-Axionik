@@ -79,6 +79,24 @@ export const CustomerAppContainer = () => {
     }
   }, [selectedTable]);
 
+  // Self-heal from a stale cached table UUID: if the DB was ever reset/
+  // recreated (new Supabase project = brand new random UUIDs for every
+  // table), a browser that already had a table cached in localStorage from
+  // before the reset ends up "selecting" a UUID that matches nothing in the
+  // current database. createOrderInDb trusts any syntactically-valid UUID
+  // without checking it actually exists, so this failed silently rather
+  // than falling back — orders got created against (or rejected for) a
+  // table_id nothing else could ever match. Once real tables have loaded,
+  // if selectedTable looks like a UUID but isn't among them, drop back to
+  // the first real table instead of continuing to use a dead reference.
+  useEffect(() => {
+    if (!tables || tables.length === 0) return;
+    const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedTable || "");
+    if (looksLikeUuid && !tables.some((t) => t.id === selectedTable)) {
+      setSelectedTable(tables[0].id);
+    }
+  }, [tables, selectedTable]);
+
   // Search, Filter, Sort in Menu
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,6 +148,19 @@ export const CustomerAppContainer = () => {
   const [preOrderAddons, setPreOrderAddons] = useState([]);
   const [preOrderSearch, setPreOrderSearch] = useState("");
   const [preOrderCategory, setPreOrderCategory] = useState("all");
+
+  // `selectedTable` deliberately stores the table's raw UUID (it has to,
+  // to match the <select>'s <option value={t.id}> and to pass straight
+  // through to order creation) — but showing that UUID directly to the
+  // customer ("You are at Table f43ca044-4817-...") is meaningless to them.
+  // This resolves it to the human-facing table number for display only;
+  // every functional use of selectedTable elsewhere is untouched.
+  const selectedTableNumber = (() => {
+    const match = tables.find((t) => t.id === selectedTable);
+    if (match) return match.number;
+    const digits = String(selectedTable).replace(/\D/g, "");
+    return digits || selectedTable;
+  })();
 
   // Table active order check (excludes Completed, Paid, or Cancelled)
   const existingOrderForTable = activeOrders.find(
@@ -674,10 +705,10 @@ export const CustomerAppContainer = () => {
 
             <div className="table-badge-large">
               <span>TABLE</span>
-              <strong>{selectedTable}</strong>
+              <strong>{selectedTableNumber}</strong>
             </div>
 
-            <h2>You are at Table {selectedTable} â€” Koramangala Branch</h2>
+            <h2>You are at Table {selectedTableNumber} — Koramangala Branch</h2>
 
             <div className="form-group" style={{ width: "100%", margin: "12px 0", textAlign: "left" }}>
               <label className="caption-text">Select / Change Your Table Number:</label>
@@ -768,7 +799,7 @@ export const CustomerAppContainer = () => {
           <div className="menu-sticky-header">
             <div>
               <h1 className="brand-truffles-title" style={{ fontSize: "20px" }}>TRUFFLES</h1>
-              <span className="caption-text">Table {selectedTable} â€¢ Koramangala</span>
+              <span className="caption-text">Table {selectedTableNumber} • Koramangala</span>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -962,7 +993,7 @@ export const CustomerAppContainer = () => {
                 </div>
 
                 <button className="btn-primary" style={{ flex: 1 }} onClick={handleConfirmAddToCart}>
-                  Add to Cart â€¢ â‚¹
+                  Add to Cart • â‚¹
                   {(selectedDish.price + selectedAddons.reduce((s, a) => s + a.price, 0)) * dishQty}
                 </button>
               </div>
@@ -1052,7 +1083,7 @@ export const CustomerAppContainer = () => {
         <div className="customer-screen-card order-tracking-view fade-in">
           <div className="tracking-header">
             <h2>Order Status</h2>
-            <span className="badge-tag active">{trackedOrder.id} â€¢ Table {trackedOrder.tableId}</span>
+            <span className="badge-tag active">{trackedOrder.id} • Table {trackedOrder.tableId}</span>
           </div>
 
           {/* Vertical Progress Bar */}
@@ -1122,7 +1153,7 @@ export const CustomerAppContainer = () => {
       {screen === "bill_pay" && trackedOrder && (
         <div className="customer-screen-card bill-pay-view fade-in">
           <h2>Your Final Bill</h2>
-          <span className="caption-text">Table {selectedTable} â€¢ Order {trackedOrder.id}</span>
+          <span className="caption-text">Table {selectedTableNumber} • Order {trackedOrder.id}</span>
 
           <div className="bill-items-list">
             {trackedOrder.items.map((item, idx) => (
@@ -1263,15 +1294,15 @@ export const CustomerAppContainer = () => {
           onClick={() => { if (!resLoading) setShowReserveModal(false); }}
           style={{
             position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
-            display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 2000
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: "16px"
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#1A1A2E", borderRadius: "20px 20px 0 0",
+              background: "#1A1A2E", borderRadius: "20px",
               padding: "24px 20px 32px", width: "100%", maxWidth: "480px",
-              maxHeight: "90vh", overflowY: "auto"
+              maxHeight: "85vh", overflowY: "auto"
             }}
           >
             {/* Modal Header */}
@@ -1294,7 +1325,7 @@ export const CustomerAppContainer = () => {
                   on {new Date(`${resDate}T${resTime}`).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                 </p>
                 <div style={{ padding: "12px", borderRadius: "10px", background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", marginBottom: "20px" }}>
-                  <p style={{ color: "#A5B4FC", fontSize: "12px", margin: 0 }}>Reservation for {customerName || "Guest"} â€¢ Your table will be ready at the reserved time.</p>
+                  <p style={{ color: "#A5B4FC", fontSize: "12px", margin: 0 }}>Reservation for {customerName || "Guest"} • Your table will be ready at the reserved time.</p>
                 </div>
                 <button className="btn-primary" style={{ width: "100%" }} onClick={() => setShowReserveModal(false)}>
                   Done
@@ -1432,7 +1463,7 @@ export const CustomerAppContainer = () => {
                 </button>
               </div>
               <p style={{ color: "#6B7280", fontSize: "12px", margin: "0 0 12px" }}>
-                Order ahead â€” we'll send you to the kitchen as soon as a table is free!
+                Order ahead — we'll send you to the kitchen as soon as a table is free!
               </p>
               {/* Search */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", borderRadius: "10px", background: "#111827", border: "1px solid #374151", marginBottom: "10px" }}>
@@ -1580,7 +1611,7 @@ export const CustomerAppContainer = () => {
               <p style={{ color: "#6B7280", fontSize: "12px", margin: "8px 0 0" }}>Show this to our staff when you're called</p>
             </div>
             <p style={{ color: "#6B7280", fontSize: "13px", marginBottom: "20px" }}>
-              Our team will notify you when Table is ready. Average wait: 15â€“20 min.
+              Our team will notify you when Table is ready. Average wait: 15–20 min.
             </p>
             <div style={{ display: "flex", gap: "10px", width: "100%" }}>
               <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setScreen("table_confirm")}>
