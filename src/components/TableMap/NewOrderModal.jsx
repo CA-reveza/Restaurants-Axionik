@@ -57,20 +57,35 @@ export const NewOrderModal = ({ table, onClose }) => {
 
   const subtotal = orderItems.reduce((sum, i) => sum + i.price * i.qty, 0);
 
-  const handleSubmitOrder = () => {
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  const handleSubmitOrder = async () => {
     if (orderItems.length === 0) {
       alert("Please add at least one item to the order.");
       return;
     }
+    if (isSubmittingOrder) return;
+    setIsSubmittingOrder(true);
 
-    createOrder({
-      tableId: table.id,
-      items: orderItems,
-      guests: guestsCount,
-      notes
-    });
-
-    onClose();
+    try {
+      // createOrder now throws on a failed database write instead of
+      // silently returning a fake order ID (see RestoContext.jsx) — this
+      // was previously called without await/error handling at all, so a
+      // failed order would still close this modal as if it succeeded,
+      // with no way for staff to know it didn't actually save.
+      await createOrder({
+        tableId: table.id,
+        items: orderItems,
+        guests: guestsCount,
+        notes
+      });
+      onClose();
+    } catch (err) {
+      console.error("[NewOrderModal] Failed to create order:", err);
+      alert("Couldn't save this order — please check your connection and try again.");
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   return (
@@ -211,11 +226,11 @@ export const NewOrderModal = ({ table, onClose }) => {
               </div>
               <button
                 className="btn-primary"
-                style={{ width: "100%" }}
-                disabled={orderItems.length === 0}
+                style={{ width: "100%", opacity: isSubmittingOrder ? 0.7 : 1 }}
+                disabled={orderItems.length === 0 || isSubmittingOrder}
                 onClick={handleSubmitOrder}
               >
-                <Check size={18} /> Send Order to KDS
+                <Check size={18} /> {isSubmittingOrder ? "Sending..." : "Send Order to KDS"}
               </button>
             </div>
           </div>

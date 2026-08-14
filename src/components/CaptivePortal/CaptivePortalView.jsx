@@ -82,8 +82,11 @@ export const CaptivePortalView = () => {
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-  const handlePlaceOrder = () => {
-    if (cart.length === 0) return;
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+
+  const handlePlaceOrder = async () => {
+    if (cart.length === 0 || isPlacingOrder) return;
+    setIsPlacingOrder(true);
 
     const orderItems = cart.map((i) => ({
       id: `cp-${Date.now()}-${Math.random()}`,
@@ -94,14 +97,20 @@ export const CaptivePortalView = () => {
       customizations: []
     }));
 
-    createOrder({
-      tableId: selectedTableId,
-      items: orderItems,
-      guests: 1,
-      notes: `Order placed via Captive Portal by ${guestName} (${phone})`
-    });
-
-    setStep("order_success");
+    try {
+      await createOrder({
+        tableId: selectedTableId,
+        items: orderItems,
+        guests: 1,
+        notes: `Order placed via Captive Portal by ${guestName} (${phone})`
+      });
+      setStep("order_success");
+    } catch (err) {
+      console.error("[CaptivePortalView] Failed to place order:", err);
+      alert("Couldn't place your order — please check your connection and try again.");
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   const filteredDishes = menuItems.filter((i) => {

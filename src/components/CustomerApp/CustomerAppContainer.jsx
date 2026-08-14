@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useResto } from "../../context/RestoContext";
 import {
   createReservation,
@@ -127,7 +127,7 @@ export const CustomerAppContainer = () => {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
-  // â”€â”€ RESERVATION STATE â”€â”€
+  // ── RESERVATION STATE ──
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [resDate, setResDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [resTime, setResTime] = useState("19:00");
@@ -138,7 +138,7 @@ export const CustomerAppContainer = () => {
   const [resSuccess, setResSuccess] = useState(null);
   const [resError, setResError] = useState("");
 
-  // â”€â”€ PRE-ORDER STATE â”€â”€
+  // ── PRE-ORDER STATE ──
   const [showPreOrderModal, setShowPreOrderModal] = useState(false);
   const [preOrderCart, setPreOrderCart] = useState([]);
   const [preOrderSubmitting, setPreOrderSubmitting] = useState(false);
@@ -170,7 +170,7 @@ export const CustomerAppContainer = () => {
            o.payment_status !== "Paid"
   );
 
-  // â”€â”€ RESERVATION HANDLERS â”€â”€
+  // ── RESERVATION HANDLERS ──
   // Generate 30-min time slots from 11:00 to 23:00
   const timeSlots = Array.from({ length: 25 }, (_, i) => {
     const totalMins = 11 * 60 + i * 30;
@@ -225,7 +225,7 @@ export const CustomerAppContainer = () => {
     }
   };
 
-  // â”€â”€ PRE-ORDER HANDLERS â”€â”€
+  // ── PRE-ORDER HANDLERS ──
   const preOrderSubtotal = preOrderCart.reduce((s, i) => s + i.total, 0);
 
   const handleAddToPreOrderCart = () => {
@@ -364,6 +364,11 @@ export const CustomerAppContainer = () => {
   const cartSubtotal = cart.reduce((sum, item) => sum + item.total, 0);
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [placeOrderError, setPlaceOrderError] = useState("");
+  // useState alone has a small window: two clicks in the same tick both read
+  // isPlacingOrder as false before either re-render commits, so both pass
+  // the guard. A ref updates synchronously and closes that window entirely.
+  const isPlacingOrderRef = useRef(false);
 
   const handlePlaceOrder = async () => {
     // Without this guard, a customer tapping "Place Order" more than once
@@ -371,9 +376,11 @@ export const CustomerAppContainer = () => {
     // feedback that it's working) fires handlePlaceOrder() again with the
     // same non-empty cart before setCart([]) below has run — each tap
     // creates its own separate, identical order. This is exactly what
-    // produced 4 duplicate orders for the same item/table in testing.
-    if (cart.length === 0 || isPlacingOrder) return;
+    // produced duplicate orders for the same item/table in testing.
+    if (cart.length === 0 || isPlacingOrderRef.current) return;
+    isPlacingOrderRef.current = true;
     setIsPlacingOrder(true);
+    setPlaceOrderError("");
 
     try {
       const orderItems = cart.map((i) => ({
@@ -394,11 +401,25 @@ export const CustomerAppContainer = () => {
         customerPhone: customerPhone || ""
       });
 
+      if (!newOrdId) {
+        throw new Error("Order was not created — no order ID returned.");
+      }
+
       setActiveOrderId(newOrdId);
       setCart([]);
       setShowCartDrawer(false);
       setScreen("tracking");
+    } catch (err) {
+      // Previously a failure here was completely silent — the button just
+      // went back to normal with zero feedback, which is exactly the
+      // situation that invites someone to assume nothing happened and tap
+      // "Place Order" again, potentially creating a real duplicate if the
+      // original request actually succeeded server-side despite the client
+      // seeing it fail (e.g. a slow response that times out client-side).
+      console.error("[CustomerApp] Failed to place order:", err);
+      setPlaceOrderError("Couldn't place your order — check your connection and try again. If you already tried once, wait a few seconds before retrying to avoid a duplicate order.");
     } finally {
+      isPlacingOrderRef.current = false;
       setIsPlacingOrder(false);
     }
   };
@@ -673,7 +694,7 @@ export const CustomerAppContainer = () => {
       {screen === "table_confirm" && (
         <div className="customer-screen-card table-confirm-splash">
           <div className="splash-content">
-            {/* â”€â”€ HEADER CONTROL BAR â”€â”€ */}
+            {/* ── HEADER CONTROL BAR ── */}
             <div style={{
               display: "flex", gap: "10px", width: "100%", marginBottom: "16px"
             }}>
@@ -904,7 +925,7 @@ export const CustomerAppContainer = () => {
                   <h3 className="dish-name">{dish.name}</h3>
                   <p className="caption-text">{dish.description}</p>
                   <div className="dish-footer-row">
-                    <span className="price-mono">â‚¹{dish.price}</span>
+                    <span className="price-mono">₹{dish.price}</span>
                     <button className="btn-secondary add-btn-sm">
                       + Add
                     </button>
@@ -919,7 +940,7 @@ export const CustomerAppContainer = () => {
             <div className="floating-cart-bar" onClick={() => setShowCartDrawer(true)}>
               <div>
                 <span className="caption-text">{cart.reduce((s, i) => s + i.qty, 0)} ITEMS</span>
-                <div className="price-mono" style={{ fontSize: "18px" }}>â‚¹{cartSubtotal}</div>
+                <div className="price-mono" style={{ fontSize: "18px" }}>₹{cartSubtotal}</div>
               </div>
               <button className="btn-primary">
                 View Cart <ArrowRight size={16} />
@@ -943,7 +964,7 @@ export const CustomerAppContainer = () => {
             <div className="sheet-body">
               <div className="sheet-title-row">
                 <h2>{selectedDish.name}</h2>
-                <span className="price-mono" style={{ fontSize: "20px" }}>â‚¹{selectedDish.price}</span>
+                <span className="price-mono" style={{ fontSize: "20px" }}>₹{selectedDish.price}</span>
               </div>
               <p className="body-text">{selectedDish.description}</p>
 
@@ -962,7 +983,7 @@ export const CustomerAppContainer = () => {
                             onChange={() => handleAddonToggle(addon)}
                           />
                           <span className="addon-name">{addon.name}</span>
-                          <span className="price-mono" style={{ fontSize: "14px" }}>+â‚¹{addon.price}</span>
+                          <span className="price-mono" style={{ fontSize: "14px" }}>+₹{addon.price}</span>
                         </label>
                       );
                     })}
@@ -993,7 +1014,7 @@ export const CustomerAppContainer = () => {
                 </div>
 
                 <button className="btn-primary" style={{ flex: 1 }} onClick={handleConfirmAddToCart}>
-                  Add to Cart • â‚¹
+                  Add to Cart • ₹
                   {(selectedDish.price + selectedAddons.reduce((s, a) => s + a.price, 0)) * dishQty}
                 </button>
               </div>
@@ -1034,7 +1055,7 @@ export const CustomerAppContainer = () => {
                           {item.addons.map((a) => a.name).join(", ")}
                         </span>
                       )}
-                      <span className="price-mono">â‚¹{item.total}</span>
+                      <span className="price-mono">₹{item.total}</span>
                     </div>
 
                     <div className="qty-picker">
@@ -1061,8 +1082,24 @@ export const CustomerAppContainer = () => {
               <div className="cart-drawer-footer">
                 <div className="subtotal-row">
                   <span>Subtotal Amount</span>
-                  <span className="timer-stats-mono" style={{ fontSize: "20px" }}>â‚¹{cartSubtotal}</span>
+                  <span className="timer-stats-mono" style={{ fontSize: "20px" }}>₹{cartSubtotal}</span>
                 </div>
+
+                {placeOrderError && (
+                  <div
+                    style={{
+                      background: "rgba(239, 68, 68, 0.1)",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      color: "#EF4444",
+                      borderRadius: "8px",
+                      padding: "10px 12px",
+                      fontSize: "13px",
+                      marginBottom: "8px"
+                    }}
+                  >
+                    {placeOrderError}
+                  </div>
+                )}
 
                 <button
                   className="btn-primary"
@@ -1124,7 +1161,7 @@ export const CustomerAppContainer = () => {
             {trackedOrder.items.map((i, idx) => (
               <div key={idx} className="summary-item-line">
                 <span>{i.qty}x {i.name}</span>
-                <span className="price-mono">â‚¹{i.price * i.qty}</span>
+                <span className="price-mono">₹{i.price * i.qty}</span>
               </div>
             ))}
           </div>
@@ -1159,17 +1196,17 @@ export const CustomerAppContainer = () => {
             {trackedOrder.items.map((item, idx) => (
               <div key={idx} className="bill-item-row">
                 <span>{item.qty}x {item.name}</span>
-                <span className="price-mono">â‚¹{item.price * item.qty}</span>
+                <span className="price-mono">₹{item.price * item.qty}</span>
               </div>
             ))}
           </div>
 
           <div className="bill-taxes-box">
-            <div className="calc-row"><span>Subtotal</span><span>â‚¹{orderSubtotal}</span></div>
-            <div className="calc-row"><span>CGST (2.5%)</span><span>â‚¹{cgst.toFixed(2)}</span></div>
-            <div className="calc-row"><span>SGST (2.5%)</span><span>â‚¹{sgst.toFixed(2)}</span></div>
-            <div className="calc-row"><span>Service Charge (5%)</span><span>â‚¹{serviceCharge.toFixed(2)}</span></div>
-            <div className="calc-row grand-total"><span>Grand Total</span><span className="timer-stats-mono" style={{ fontSize: "22px" }}>â‚¹{grandTotal}</span></div>
+            <div className="calc-row"><span>Subtotal</span><span>₹{orderSubtotal}</span></div>
+            <div className="calc-row"><span>CGST (2.5%)</span><span>₹{cgst.toFixed(2)}</span></div>
+            <div className="calc-row"><span>SGST (2.5%)</span><span>₹{sgst.toFixed(2)}</span></div>
+            <div className="calc-row"><span>Service Charge (5%)</span><span>₹{serviceCharge.toFixed(2)}</span></div>
+            <div className="calc-row grand-total"><span>Grand Total</span><span className="timer-stats-mono" style={{ fontSize: "22px" }}>₹{grandTotal}</span></div>
           </div>
 
           {/* Split Bill Toggle */}
@@ -1187,7 +1224,7 @@ export const CustomerAppContainer = () => {
                   <span className="price-mono">{splitPeople}</span>
                   <button onClick={() => setSplitPeople(splitPeople + 1)}>+</button>
                 </div>
-                <span className="timer-stats-mono" style={{ fontSize: "16px" }}>â‚¹{perPersonAmount}/person</span>
+                <span className="timer-stats-mono" style={{ fontSize: "16px" }}>₹{perPersonAmount}/person</span>
               </div>
             )}
           </div>
@@ -1212,7 +1249,7 @@ export const CustomerAppContainer = () => {
             </div>
           ) : (
             <button className="btn-primary" style={{ width: "100%", marginTop: "12px" }} onClick={handlePaySuccess}>
-              Pay â‚¹{isSplitBill ? perPersonAmount : grandTotal} Now
+              Pay ₹{isSplitBill ? perPersonAmount : grandTotal} Now
             </button>
           )}
         </div>
@@ -1286,9 +1323,9 @@ export const CustomerAppContainer = () => {
         </div>
       )}
       
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      {/* ========================================
            RESERVE TABLE MODAL
-      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      ======================================== */}
       {showReserveModal && (
         <div
           onClick={() => { if (!resLoading) setShowReserveModal(false); }}
@@ -1318,7 +1355,7 @@ export const CustomerAppContainer = () => {
             {resSuccess ? (
               /* Success State */
               <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <div style={{ fontSize: "48px", marginBottom: "12px" }}>ðŸŽ‰</div>
+                <div style={{ fontSize: "48px", marginBottom: "12px" }}>🎉</div>
                 <h3 style={{ color: "#7EE787", margin: "0 0 8px" }}>Reservation Confirmed!</h3>
                 <p style={{ color: "#9CA3AF", fontSize: "13px", margin: "0 0 20px" }}>
                   Table {tables.find(t => t.id === resTableId)?.number} reserved for {resGuests} guests<br />
@@ -1372,7 +1409,7 @@ export const CustomerAppContainer = () => {
                 <div style={{ marginBottom: "16px" }}>
                   <label style={{ display: "block", color: "#9CA3AF", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Number of Guests</label>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <button onClick={() => setResGuests(Math.max(1, resGuests - 1))} className="btn-secondary" style={{ padding: "8px 16px" }}>âˆ’</button>
+                    <button onClick={() => setResGuests(Math.max(1, resGuests - 1))} className="btn-secondary" style={{ padding: "8px 16px" }}>−</button>
                     <span style={{ color: "#fff", fontWeight: 700, fontSize: "18px", minWidth: "40px", textAlign: "center" }}>{resGuests}</span>
                     <button onClick={() => setResGuests(Math.min(12, resGuests + 1))} className="btn-secondary" style={{ padding: "8px 16px" }}>+</button>
                     <span style={{ color: "#6B7280", fontSize: "13px" }}>guests</span>
@@ -1433,9 +1470,9 @@ export const CustomerAppContainer = () => {
         </div>
       )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      {/* ========================================
            PRE-ORDER FOOD MODAL
-      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      ======================================== */}
       {showPreOrderModal && (
         <div
           onClick={() => setShowPreOrderModal(false)}
@@ -1517,7 +1554,7 @@ export const CustomerAppContainer = () => {
                   <div style={{ flex: 1 }}>
                     <p style={{ margin: "0 0 2px", color: "#F9FAFB", fontWeight: 600, fontSize: "14px" }}>{dish.name}</p>
                     <p style={{ margin: "0 0 4px", color: "#6B7280", fontSize: "12px" }}>{dish.description}</p>
-                    <span style={{ color: "#FF6B35", fontWeight: 700, fontSize: "14px" }}>â‚¹{dish.price}</span>
+                    <span style={{ color: "#FF6B35", fontWeight: 700, fontSize: "14px" }}>₹{dish.price}</span>
                   </div>
                   <button style={{ padding: "6px 14px", borderRadius: "8px", background: "#FF6B35", color: "#fff", border: "none", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}>
                     + Add
@@ -1532,12 +1569,12 @@ export const CustomerAppContainer = () => {
                 <div style={{ marginBottom: "10px" }}>
                   {preOrderCart.map((item) => (
                     <div key={item.cartId} style={{ display: "flex", justifyContent: "space-between", color: "#D1D5DB", fontSize: "13px", marginBottom: "4px" }}>
-                      <span>{item.qty}Ã— {item.name}</span>
-                      <span>â‚¹{item.total}</span>
+                      <span>{item.qty}× {item.name}</span>
+                      <span>₹{item.total}</span>
                     </div>
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", color: "#fff", fontWeight: 700, borderTop: "1px solid #374151", paddingTop: "8px", marginTop: "8px" }}>
-                    <span>Total</span><span>â‚¹{preOrderSubtotal}</span>
+                    <span>Total</span><span>₹{preOrderSubtotal}</span>
                   </div>
                 </div>
                 <button
@@ -1545,7 +1582,7 @@ export const CustomerAppContainer = () => {
                   disabled={preOrderSubmitting}
                   onClick={handleSubmitPreOrder}
                 >
-                  {preOrderSubmitting ? "Placing Pre-Order..." : `Place Pre-Order (â‚¹${preOrderSubtotal}) â†’`}
+                  {preOrderSubmitting ? "Placing Pre-Order..." : `Place Pre-Order (₹${preOrderSubtotal}) →`}
                 </button>
               </div>
             )}
@@ -1576,19 +1613,19 @@ export const CustomerAppContainer = () => {
                     <label key={addon.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px", borderRadius: "8px", cursor: "pointer", marginBottom: "4px", background: isSelected ? "rgba(255,107,53,0.15)" : "transparent" }}>
                       <input type="checkbox" checked={isSelected} onChange={() => setPreOrderAddons(isSelected ? preOrderAddons.filter((a) => a.id !== addon.id) : [...preOrderAddons, addon])} />
                       <span style={{ color: "#D1D5DB", fontSize: "14px" }}>{addon.name}</span>
-                      <span style={{ marginLeft: "auto", color: "#FF6B35", fontSize: "13px" }}>+â‚¹{addon.price}</span>
+                      <span style={{ marginLeft: "auto", color: "#FF6B35", fontSize: "13px" }}>+₹{addon.price}</span>
                     </label>
                   );
                 })}
               </div>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px" }}>
-              <button onClick={() => setPreOrderDishQty(Math.max(1, preOrderDishQty - 1))} className="btn-secondary" style={{ padding: "8px 16px" }}>âˆ’</button>
+              <button onClick={() => setPreOrderDishQty(Math.max(1, preOrderDishQty - 1))} className="btn-secondary" style={{ padding: "8px 16px" }}>−</button>
               <span style={{ color: "#fff", fontWeight: 700, fontSize: "18px" }}>{preOrderDishQty}</span>
               <button onClick={() => setPreOrderDishQty(preOrderDishQty + 1)} className="btn-secondary" style={{ padding: "8px 16px" }}>+</button>
             </div>
             <button className="btn-primary" style={{ width: "100%" }} onClick={handleAddToPreOrderCart}>
-              Add â‚¹{(preOrderDish.price + preOrderAddons.reduce((s, a) => s + a.price, 0)) * preOrderDishQty} to Pre-Order
+              Add ₹{(preOrderDish.price + preOrderAddons.reduce((s, a) => s + a.price, 0)) * preOrderDishQty} to Pre-Order
             </button>
           </div>
         </div>
@@ -1598,7 +1635,7 @@ export const CustomerAppContainer = () => {
       {screen === "preorder_success" && (
         <div className="customer-screen-card portal-splash fade-in">
           <div className="splash-content" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "56px", marginBottom: "8px" }}>ðŸŽŸï¸</div>
+            <div style={{ fontSize: "56px", marginBottom: "8px" }}>🎟️</div>
             <h2 style={{ color: "#7EE787", marginBottom: "8px" }}>Pre-Order Placed!</h2>
             <p className="body-text" style={{ marginBottom: "20px" }}>Your order is queued. We'll seat you as soon as a table is available!</p>
             <div style={{

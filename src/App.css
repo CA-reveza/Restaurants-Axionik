@@ -316,15 +316,27 @@
 
 .category-scroll-bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 
-.menu-items-grid { display: flex; flex-direction: column; gap: 12px; }
+/* Changed from a single-column flex list to a responsive grid so items sit
+   side-by-side instead of one long vertical scroll — auto-fill lets it show
+   2 columns on a typical phone width and more on wider screens, without a
+   fixed column count that would break on unusual viewport sizes. */
+.menu-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
 
 .dish-item-card {
+  /* Stacked (image on top, info below) instead of side-by-side, since a
+     90x90 thumbnail next to text doesn't leave enough room for the text
+     once the card itself is only ~150px wide in a grid column. */
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  padding: 12px;
+  padding: 10px;
   cursor: pointer;
   transition: border-color 200ms ease;
 }
@@ -333,8 +345,8 @@
 
 .dish-img-box {
   position: relative;
-  width: 90px;
-  height: 90px;
+  width: 100%;
+  height: 110px;
   border-radius: var(--radius-btn);
   overflow: hidden;
   flex-shrink: 0;
@@ -359,9 +371,18 @@
 
 .dish-info-box { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 
+.dish-info-box .caption-text {
+  /* Clamp description to 2 lines so cards in the same grid row stay a
+     consistent height regardless of how long each dish's description is. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .dish-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
 
-.dish-footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.dish-footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; flex-wrap: wrap; gap: 6px; }
 
 .add-btn-sm { padding: 4px 12px; font-size: 12px; }
 

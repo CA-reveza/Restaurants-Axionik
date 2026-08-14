@@ -793,10 +793,25 @@ export const RestoProvider = ({ children }) => {
       customerPhone: finalCustPhone
     });
 
+    // createOrderInDb swallows its own errors and returns null on failure
+    // (so one bad order doesn't crash the whole data-loading cycle elsewhere
+    // it's used) — but here, at the point of a customer actively placing an
+    // order, silently treating a failed write as success is exactly backwards.
+    // The previous code did `dbOrder?.id || \`ORD-${random}\`` — meaning a
+    // failed insert still returned a plausible-looking fake order ID, the
+    // customer's screen moved on to "order tracking" as if it worked, and
+    // nothing was ever actually saved to the database. Throwing here lets
+    // the caller's error handling (see CustomerAppContainer's
+    // handlePlaceOrder) actually show the customer that it failed, instead
+    // of a phantom success.
+    if (!dbOrder || !dbOrder.id) {
+      throw new Error("Failed to save order to the database.");
+    }
+
     // Synchronize data model directly from Supabase DB
     await loadSupabaseData();
 
-    const newOrderId = dbOrder?.id || `ORD-${Math.floor(100 + Math.random() * 900)}`;
+    const newOrderId = dbOrder.id;
     const newOrderPayload = {
       id: newOrderId,
       tableId: displayTableId,
