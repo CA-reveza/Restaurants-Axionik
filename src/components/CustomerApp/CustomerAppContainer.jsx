@@ -1538,29 +1538,37 @@ export const CustomerAppContainer = () => {
               </div>
             </div>
 
-            {/* Menu Scroll Area */}
+            {/* Menu Scroll Area — was a hardcoded inline-styled horizontal
+                row list, completely separate from the main menu's
+                .menu-items-grid/.dish-item-card classes. That's why fixing
+                the main menu's layout had no effect here: this is a
+                different code path for the Pre-Order flow specifically.
+                Rebuilt to reuse the same grid classes so both menus look
+                and behave consistently. */}
             <div style={{ overflowY: "auto", flex: 1, padding: "0 20px" }}>
-              {preOrderMenuItems.map((dish) => (
-                <div
-                  key={dish.id}
-                  onClick={() => { setPreOrderDish(dish); setPreOrderDishQty(1); setPreOrderAddons([]); }}
-                  style={{
-                    display: "flex", gap: "12px", alignItems: "center",
-                    padding: "12px 0", borderBottom: "1px solid #1F2937", cursor: "pointer"
-                  }}
-                >
-                  {/* 56x56 inline thumbnail in the pre-order list — 112px covers retina. */}
-                  {dish.image && <img src={sizedImageUrl(dish.image, 112)} alt={dish.name} loading="lazy" decoding="async" style={{ width: "56px", height: "56px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />}
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: "0 0 2px", color: "#F9FAFB", fontWeight: 600, fontSize: "14px" }}>{dish.name}</p>
-                    <p style={{ margin: "0 0 4px", color: "#6B7280", fontSize: "12px" }}>{dish.description}</p>
-                    <span style={{ color: "#FF6B35", fontWeight: 700, fontSize: "14px" }}>₹{dish.price}</span>
+              <div className="menu-items-grid">
+                {preOrderMenuItems.map((dish) => (
+                  <div
+                    key={dish.id}
+                    className="dish-item-card"
+                    onClick={() => { setPreOrderDish(dish); setPreOrderDishQty(1); setPreOrderAddons([]); }}
+                  >
+                    <div className="dish-img-box">
+                      {dish.image && (
+                        <img src={sizedImageUrl(dish.image, 180)} alt={dish.name} loading="lazy" decoding="async" />
+                      )}
+                    </div>
+                    <div className="dish-info-box">
+                      <h3 className="dish-name" style={{ color: "#F9FAFB" }}>{dish.name}</h3>
+                      <p className="caption-text" style={{ color: "#9CA3AF" }}>{dish.description}</p>
+                      <div className="dish-footer-row">
+                        <span className="price-mono" style={{ color: "#FF6B35" }}>₹{dish.price}</span>
+                        <button className="btn-secondary add-btn-sm">+ Add</button>
+                      </div>
+                    </div>
                   </div>
-                  <button style={{ padding: "6px 14px", borderRadius: "8px", background: "#FF6B35", color: "#fff", border: "none", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}>
-                    + Add
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
             {/* Cart Summary + Submit */}
